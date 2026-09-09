@@ -13,7 +13,7 @@ its acceptance criteria and test plan are green and the change is committed.
 
 | # | Task | Invariant(s) | Depends on | Status |
 |---|------|--------------|------------|--------|
-| [00](TASK-00-build-tooling-ci.md) | Build, tooling & CI baseline | — | — | Not started |
+| [00](TASK-00-build-tooling-ci.md) | Build, tooling & CI baseline | — | — | Done |
 | [01](TASK-01-data-model-migrations.md) | Data model & migrations | #1 #2 #3 #4 | 00 | Not started |
 | [02](TASK-02-bearer-auth.md) | Bearer-token auth & request context | — | 00 | Not started |
 | [03](TASK-03-wallet-get-or-create.md) | Wallet get-or-create + balance read | #4 | 01 02 | Not started |

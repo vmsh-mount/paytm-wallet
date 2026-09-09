@@ -36,7 +36,20 @@
 |---|---|---|
 | Stack (Java 21 / Spring Boot 3 / JDBC) | ✅ | |
 | Three swappable transfer engines | ✅ | |
+| Maven wrapper (pinned 3.9.9) + Testcontainers-in-CI over H2 | ✅ | |
+| GitHub Actions YAML, `.editorconfig` contents | | ✅ |
 | ... | | |
+
+## Build & tooling
+
+- `./mvnw -B verify` is the single source of truth — Maven wrapper pinned to 3.9.9 so
+  CI and a fresh clone build identically, no global Maven assumed. (The Dockerfile build
+  stage still uses its base image's Maven; unifying on the wrapper is a TASK-10 cleanup.)
+- Integration tests run against a real Postgres via Testcontainers (not H2): the
+  invariants depend on Postgres semantics (`ON CONFLICT`, `FOR UPDATE`, `SERIALIZABLE`)
+  that an embedded DB would fake. Cost: CI needs a Docker daemon (GitHub-hosted runners have one).
+- **No license headers** on source files — single-repo take-home, not distributed; a header
+  policy would be noise. Noted here so the omission is a decision, not an oversight.
 
 ## Free-tier cost note
 

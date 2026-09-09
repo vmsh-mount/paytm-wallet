@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Not started |
+| **Status** | Done |
 | **Branch** | `task/00-build-tooling-ci` |
 | **Depends on** | — |
 | **Invariant(s)** | — |
