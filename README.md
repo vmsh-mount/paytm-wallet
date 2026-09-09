@@ -4,6 +4,9 @@ Wallet service with peer-to-peer transfers. Round-2 exercise — see [docs/PROBL
 
 **Status: scaffold.** Structure and infra are in place; business logic methods throw `UnsupportedOperationException` with `TODO(scaffold)` markers.
 
+**Delivery plan:** [`docs/plan/`](docs/plan/README.md) — 14 tasks, each with scope, design decisions, acceptance criteria and a test plan. Worked one at a time.
+**Evals:** [`evals/`](evals/README.md) — black-box invariant + operational scenario specs; traceability in [`evals/matrix.md`](evals/matrix.md).
+
 ## Stack
 
 | Concern | Choice |
@@ -55,11 +58,9 @@ src/main/resources/
   application.yml, logback-spring.xml
 ```
 
-## TODO to make it real
+## Roadmap
 
-- [ ] Implement repositories, services, controllers, error handler, auth filter
-- [ ] Implement the 3 transfer engines + parameterised `InvariantsIT`
-- [ ] Implement `scripts/burst.sh` probes
-- [ ] Deploy to Render; fill live URL + public logs link here
-- [ ] Complete `docs/WRITEUP.md`
-- [ ] Add Maven wrapper (`mvn wrapper:wrapper`) so builds need no local Maven
+Execution is tracked in [`docs/plan/README.md`](docs/plan/README.md) — 14 tasks,
+5 milestones (M1 correct-core → M5 submitted). Start at
+[TASK-00](docs/plan/TASK-00-build-tooling-ci.md) and work down; each task's
+Definition of Done gates the next.
