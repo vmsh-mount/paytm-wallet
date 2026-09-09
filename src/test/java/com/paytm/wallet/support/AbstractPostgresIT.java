@@ -3,29 +3,36 @@ package com.paytm.wallet.support;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Base for {@code *IT} classes: a real Postgres via Testcontainers wired in with
- * {@code @ServiceConnection}, Flyway runs on context start, and every test begins
- * with empty tables.
+ * Base for {@code *IT} classes: one real Postgres via Testcontainers, Flyway runs
+ * on context start, every test begins with empty tables.
  *
- * <p>The {@code static @Container} has per-class lifecycle, so each IT class
- * spins up its own container (~a few seconds each on CI). Acceptable at this
- * count; if the IT suite grows, switch to a hand-managed singleton container
- * (started in a static initializer, never stopped).
+ * <p>The container is a hand-managed singleton — started once in a static
+ * initializer and never explicitly stopped (Ryuk / JVM exit reaps it). It is
+ * shared across every IT class in the failsafe run, which avoids the per-class
+ * container start/stop churn — and the races with Spring's context cache — that
+ * a {@code @Testcontainers}-managed {@code static @Container} caused.
  */
 @SpringBootTest
-@Testcontainers
 public abstract class AbstractPostgresIT {
 
-    @Container
-    @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+
+    static {
+        POSTGRES.start();
+    }
+
+    @DynamicPropertySource
+    static void datasourceProps(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
+    }
 
     @Autowired
     protected JdbcTemplate jdbc;
