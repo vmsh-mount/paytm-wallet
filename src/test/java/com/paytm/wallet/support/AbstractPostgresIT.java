@@ -10,9 +10,14 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Base for {@code *IT} classes: one real Postgres (Testcontainers) shared across
- * the suite via {@code @ServiceConnection}, Flyway runs on context start, and
- * every test begins with empty tables.
+ * Base for {@code *IT} classes: a real Postgres via Testcontainers wired in with
+ * {@code @ServiceConnection}, Flyway runs on context start, and every test begins
+ * with empty tables.
+ *
+ * <p>The {@code static @Container} has per-class lifecycle, so each IT class
+ * spins up its own container (~a few seconds each on CI). Acceptable at this
+ * count; if the IT suite grows, switch to a hand-managed singleton container
+ * (started in a static initializer, never stopped).
  */
 @SpringBootTest
 @Testcontainers
@@ -27,6 +32,6 @@ public abstract class AbstractPostgresIT {
 
     @BeforeEach
     void truncateAll() {
-        jdbc.execute("TRUNCATE transfers, wallets RESTART IDENTITY CASCADE");
+        jdbc.execute("TRUNCATE transfers, wallets CASCADE");
     }
 }

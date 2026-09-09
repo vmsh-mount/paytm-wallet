@@ -6,8 +6,9 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Proxy;
 import java.sql.ResultSet;
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
 
@@ -21,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RowMappersTest {
 
     private static final Instant CREATED = Instant.parse("2026-01-02T03:04:05Z");
+    private static final OffsetDateTime CREATED_ODT = CREATED.atOffset(ZoneOffset.ofHours(5));
 
     /** Minimal ResultSet: getX("col") returns row.get("col"); everything else is unused. */
     private static ResultSet row(Map<String, Object> row) {
@@ -28,7 +30,7 @@ class RowMappersTest {
                 RowMappersTest.class.getClassLoader(),
                 new Class<?>[]{ResultSet.class},
                 (proxy, method, args) -> switch (method.getName()) {
-                    case "getObject", "getString", "getLong", "getTimestamp" -> {
+                    case "getObject", "getString", "getLong" -> {
                         Object v = row.get((String) args[0]);
                         if (v == null && method.getReturnType() == long.class) {
                             yield 0L;
@@ -47,7 +49,7 @@ class RowMappersTest {
                 "id", id,
                 "user_id", "alice",
                 "balance_paise", 42_00L,
-                "created_at", Timestamp.from(CREATED))), 1);
+                "created_at", CREATED_ODT)), 1);
 
         assertThat(w).isEqualTo(new Wallet(id, "alice", 42_00L, CREATED));
     }
@@ -66,7 +68,7 @@ class RowMappersTest {
                 "request_fingerprint", "fp-1",
                 "status", "DECLINED",
                 "decline_reason", "insufficient_funds",
-                "created_at", Timestamp.from(CREATED))), 1);
+                "created_at", CREATED_ODT)), 1);
 
         assertThat(t).isEqualTo(new Transfer(id, from, to, 150L, "key-1", "fp-1",
                 Transfer.Status.DECLINED, "insufficient_funds", CREATED));
@@ -83,7 +85,7 @@ class RowMappersTest {
         r.put("request_fingerprint", "f");
         r.put("status", "COMPLETED");
         r.put("decline_reason", null);
-        r.put("created_at", Timestamp.from(CREATED));
+        r.put("created_at", CREATED_ODT);
 
         Transfer t = RowMappers.TRANSFER.mapRow(row(r), 1);
 

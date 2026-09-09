@@ -4,14 +4,15 @@ import com.paytm.wallet.domain.Transfer;
 import com.paytm.wallet.domain.Wallet;
 import org.springframework.jdbc.core.RowMapper;
 
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
  * Column -> record mappers. One definition per table so every query returns the
- * same shape. {@code timestamptz} is read as an instant and exposed as a UTC
- * {@link Instant}; a NULL {@code decline_reason} maps to {@code null}.
+ * same shape. {@code timestamptz} is read as an {@link OffsetDateTime} and
+ * exposed as a UTC {@link Instant}; a NULL {@code decline_reason} maps to
+ * {@code null}.
  */
 public final class RowMappers {
 
@@ -19,7 +20,7 @@ public final class RowMappers {
             rs.getObject("id", UUID.class),
             rs.getString("user_id"),
             rs.getLong("balance_paise"),
-            toInstant(rs.getTimestamp("created_at")));
+            toInstant(rs.getObject("created_at", OffsetDateTime.class)));
 
     public static final RowMapper<Transfer> TRANSFER = (rs, rowNum) -> new Transfer(
             rs.getObject("id", UUID.class),
@@ -30,10 +31,10 @@ public final class RowMappers {
             rs.getString("request_fingerprint"),
             Transfer.Status.valueOf(rs.getString("status")),
             rs.getString("decline_reason"),
-            toInstant(rs.getTimestamp("created_at")));
+            toInstant(rs.getObject("created_at", OffsetDateTime.class)));
 
-    private static Instant toInstant(Timestamp ts) {
-        return ts == null ? null : ts.toInstant();
+    private static Instant toInstant(OffsetDateTime odt) {
+        return odt == null ? null : odt.toInstant();
     }
 
     private RowMappers() {}

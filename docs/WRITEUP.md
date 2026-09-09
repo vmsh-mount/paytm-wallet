@@ -5,7 +5,7 @@
 ## Data model
 
 - `wallets(id, user_id UNIQUE, balance_paise BIGINT CHECK >= 0, created_at)`
-- `transfers(id, from_wallet_id FK, to_wallet_id FK, amount_paise CHECK > 0, idempotency_key UNIQUE, request_fingerprint, status, decline_reason, created_at)` + `CHECK (from_wallet_id <> to_wallet_id)`
+- `transfers(id, from_wallet_id FK, to_wallet_id FK, amount_paise CHECK > 0, idempotency_key UNIQUE, request_fingerprint, status, decline_reason, created_at)` + `CHECK (from_wallet_id <> to_wallet_id)` + `CHECK (status <> 'DECLINED' OR decline_reason IS NOT NULL)`
 - Money = integer **paise** everywhere, stored as `bigint` (max ≈ 9.2×10¹⁸ paise — no realistic overflow). No floats, no `NUMERIC` rupees (invites float thinking, slower).
 - The V1 migration is **frozen** (header comment); Flyway validates checksums on boot, so drift fails fast. Further changes go to `V2+`.
 - Three of the four invariants are made *impossible to violate* by the schema alone: overdraft (`CHECK balance_paise >= 0`), duplicate wallet (`UNIQUE user_id`), duplicate idempotency key (`UNIQUE idempotency_key`). Conservation is the one that still needs the service layer (debit+credit in one tx); the FKs at least guarantee both wallets exist.

@@ -36,7 +36,9 @@ CREATE TABLE transfers (
     decline_reason      text,
     created_at          timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT transfers_idempotency_key_key UNIQUE (idempotency_key),   -- #3
-    CONSTRAINT transfers_distinct_wallets   CHECK (from_wallet_id <> to_wallet_id)
+    CONSTRAINT transfers_distinct_wallets   CHECK (from_wallet_id <> to_wallet_id),
+    CONSTRAINT transfers_decline_reason_iff_declined
+        CHECK (status <> 'DECLINED' OR decline_reason IS NOT NULL)
 );
 
 CREATE INDEX transfers_from_wallet_idx ON transfers (from_wallet_id);
