@@ -4,12 +4,15 @@ import com.paytm.wallet.domain.Wallet;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 /** JDBC access for {@code wallets}. Raw SQL on purpose — no JPA. */
 @Repository
 public class WalletRepository {
+
+    private static final String COLUMNS = "id, user_id, balance_paise, created_at";
 
     private final JdbcTemplate jdbc;
 
@@ -19,14 +22,22 @@ public class WalletRepository {
 
     /** INSERT ... ON CONFLICT (user_id) DO NOTHING. Returns true if a row was created. */
     public boolean insertIfAbsent(String userId) {
-        throw new UnsupportedOperationException("scaffold");
+        throw new UnsupportedOperationException("scaffold: write path lands in TASK-03");
     }
 
     public Optional<Wallet> findByUserId(String userId) {
-        throw new UnsupportedOperationException("scaffold");
+        return first(jdbc.query(
+                "SELECT " + COLUMNS + " FROM wallets WHERE user_id = ?",
+                RowMappers.WALLET, userId));
     }
 
     public Optional<Wallet> findById(UUID id) {
-        throw new UnsupportedOperationException("scaffold");
+        return first(jdbc.query(
+                "SELECT " + COLUMNS + " FROM wallets WHERE id = ?",
+                RowMappers.WALLET, id));
+    }
+
+    private static <T> Optional<T> first(List<T> rows) {
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
 }

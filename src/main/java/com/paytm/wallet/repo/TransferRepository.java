@@ -4,12 +4,17 @@ import com.paytm.wallet.domain.Transfer;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 /** JDBC access for {@code transfers}. The idempotency key lives here as a UNIQUE column. */
 @Repository
 public class TransferRepository {
+
+    private static final String COLUMNS =
+            "id, from_wallet_id, to_wallet_id, amount_paise, idempotency_key, "
+            + "request_fingerprint, status, decline_reason, created_at";
 
     private final JdbcTemplate jdbc;
 
@@ -18,10 +23,18 @@ public class TransferRepository {
     }
 
     public Optional<Transfer> findByIdempotencyKey(String key) {
-        throw new UnsupportedOperationException("scaffold");
+        return first(jdbc.query(
+                "SELECT " + COLUMNS + " FROM transfers WHERE idempotency_key = ?",
+                RowMappers.TRANSFER, key));
     }
 
     public Optional<Transfer> findById(UUID id) {
-        throw new UnsupportedOperationException("scaffold");
+        return first(jdbc.query(
+                "SELECT " + COLUMNS + " FROM transfers WHERE id = ?",
+                RowMappers.TRANSFER, id));
+    }
+
+    private static <T> Optional<T> first(List<T> rows) {
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
 }

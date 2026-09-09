@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Not started |
+| **Status** | Done |
 | **Branch** | `task/01-data-model-migrations` |
 | **Depends on** | TASK-00 |
 | **Invariant(s)** | #1 #2 #3 #4 (schema-level enforcement) |
