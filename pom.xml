@@ -68,6 +68,11 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>postgresql</artifactId>
             <scope>test</scope>
@@ -83,8 +88,11 @@
         <dependencies>
             <dependency>
                 <groupId>org.testcontainers</groupId>
+                <!-- 1.20.4+ bundles docker-java 3.4.x, which negotiates a modern
+                     Docker Engine API version. Older builds pin API 1.32, which
+                     Docker Engine 28+ rejects ("minimum supported API version is 1.44"). -->
                 <artifactId>testcontainers-bom</artifactId>
-                <version>1.20.1</version>
+                <version>1.20.4</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -96,6 +104,13 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

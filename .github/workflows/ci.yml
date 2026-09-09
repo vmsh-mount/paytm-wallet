@@ -4,6 +4,9 @@ on:
     branches: [ main ]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,6 +17,15 @@ jobs:
           java-version: "21"
           distribution: temurin
           cache: maven
-      - run: mvn -B verify
+
+      # Testcontainers needs a Docker daemon; GitHub-hosted ubuntu runners ship one.
+      - name: mvnw verify
+        run: ./mvnw -B verify
+
+      - name: no SNAPSHOT dependencies
+        run: |
+          ./mvnw -B -q dependency:tree | tee /tmp/tree.txt
+          ! grep -q SNAPSHOT /tmp/tree.txt
+
       - name: docker build
         run: docker build -t paytm-wallet:ci .

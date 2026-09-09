@@ -1,6 +1,10 @@
 # paytm-wallet
 
+[![ci](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
+
 Wallet service with peer-to-peer transfers. Round-2 exercise — see [docs/PROBLEM_STATEMENT.md](docs/PROBLEM_STATEMENT.md).
+
+Build: `./mvnw -B verify` (Maven wrapper pinned to 3.9.9; needs a JDK 21+ and a Docker daemon for the Testcontainers-backed tests).
 
 **Status: scaffold.** Structure and infra are in place; business logic methods throw `UnsupportedOperationException` with `TODO(scaffold)` markers.
 
@@ -35,7 +39,7 @@ Auth: `Authorization: Bearer <token>` → user id, from `AUTH_TOKENS` config.
 docker compose up --build      # app + Postgres, one command, http://localhost:8080
 ```
 
-Without Docker: `mvn spring-boot:run` (needs a local Postgres matching `application.yml` defaults).
+Without Docker: `./mvnw spring-boot:run` (needs a local Postgres matching `application.yml` defaults).
 
 ## Burst probes
 
