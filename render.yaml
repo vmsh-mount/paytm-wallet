@@ -1,0 +1,29 @@
+# Render blueprint — free web service + free managed Postgres. ₹0, no card.
+# Deploy: push repo, "New > Blueprint" on render.com, point at this file.
+services:
+  - type: web
+    name: paytm-wallet
+    runtime: docker
+    plan: free
+    healthCheckPath: /actuator/health/readiness
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: paytm-wallet-db
+          property: connectionString   # note: convert to jdbc: form at startup if needed
+      - key: DATABASE_USER
+        fromDatabase:
+          name: paytm-wallet-db
+          property: user
+      - key: DATABASE_PASSWORD
+        fromDatabase:
+          name: paytm-wallet-db
+          property: password
+      - key: TRANSFER_ENGINE
+        value: conditional-update
+      - key: AUTH_TOKENS
+        sync: false
+
+databases:
+  - name: paytm-wallet-db
+    plan: free

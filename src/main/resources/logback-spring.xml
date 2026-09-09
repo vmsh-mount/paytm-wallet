@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Structured JSON logs to stdout. Every line carries correlation_id via MDC. -->
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>correlation_id</includeMdcKeyName>
+            <customFields>{"service":"paytm-wallet"}</customFields>
+        </encoder>
+    </appender>
+
+    <appender name="PLAIN" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%X{correlation_id}] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <springProfile name="local">
+        <root level="INFO"><appender-ref ref="PLAIN"/></root>
+    </springProfile>
+    <springProfile name="!local">
+        <root level="INFO"><appender-ref ref="JSON"/></root>
+    </springProfile>
+</configuration>
