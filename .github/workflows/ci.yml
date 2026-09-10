@@ -37,13 +37,10 @@ jobs:
 
       - name: trivy scan (informational)
         continue-on-error: true
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: paytm-wallet:ci
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "0"
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.56.2 image --severity HIGH,CRITICAL --ignore-unfixed \
+            --exit-code 0 --scanners vuln paytm-wallet:ci
 
       - name: verify-container.sh (EVAL-O1 + EVAL-O2)
         run: ./scripts/verify-container.sh
