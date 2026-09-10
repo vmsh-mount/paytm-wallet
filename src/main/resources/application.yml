@@ -37,6 +37,14 @@ management:
     health:
       probes:
         enabled: true
+      # readiness = process up AND the DB reachable (load-balancer + compose gate);
+      # liveness = process up (orchestrator restart trigger). Wrong split ⇒ traffic
+      # to an app that can't serve, or restart loops on a transient DB blip.
+      group:
+        readiness:
+          include: readinessState, db
+      show-details: when_authorized
+      show-components: always
   metrics:
     distribution:
       percentiles-histogram:

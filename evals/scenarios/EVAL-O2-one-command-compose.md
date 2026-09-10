@@ -6,7 +6,7 @@
 | **Invariant** | — |
 | **Owning task** | TASK-10 |
 | **Runs against** | local / CI |
-| **Status** | Draft |
+| **Status** | Ready — `scripts/verify-container.sh` in CI: one `docker compose up` -> healthy < 60s, Flyway applied, smoke `POST /wallets` 200, db-down -> readiness 503 -> recover w/o restart, `down -v` clean |
 
 ## Goal
 

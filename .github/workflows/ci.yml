@@ -27,5 +27,23 @@ jobs:
           ./mvnw -B -q dependency:tree | tee /tmp/tree.txt
           ! grep -q SNAPSHOT /tmp/tree.txt
 
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - name: docker build
         run: docker build -t paytm-wallet:ci .
+
+      - name: trivy scan (informational)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: paytm-wallet:ci
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+
+      - name: verify-container.sh (EVAL-O1 + EVAL-O2)
+        run: ./scripts/verify-container.sh
