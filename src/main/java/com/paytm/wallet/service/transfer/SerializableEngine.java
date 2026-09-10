@@ -31,7 +31,7 @@ public class SerializableEngine extends AbstractJdbcTransferEngine {
 
     public SerializableEngine(JdbcTemplate jdbc, PlatformTransactionManager txManager,
                               WalletMetrics metrics, int maxRetries) {
-        super(jdbc, txManager, metrics, TransactionDefinition.ISOLATION_SERIALIZABLE);
+        super(jdbc, txManager, metrics, Engine.SERIALIZABLE, TransactionDefinition.ISOLATION_SERIALIZABLE);
         this.maxRetries = maxRetries;
     }
 

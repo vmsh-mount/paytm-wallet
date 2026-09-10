@@ -41,7 +41,7 @@ concurrent contention in `InvariantsIT`; the default engine wired end to end
   but the hook exists)
 - Domain events: `transfer.created`, `transfer.debited`, `transfer.credited`,
   `transfer.declined`
-- Metrics: `wallet.transfers.created`, `wallet.transfers.declined{reason=insufficient_funds}`
+- Metrics: `wallet.transfers.completed`, `wallet.transfers.declined{reason=insufficient_funds}`
 - Money declines are **not exceptions** — `Transfer{status=DECLINED}` returned,
   HTTP `201`/`200` (decide in TASK-06)
 

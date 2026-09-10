@@ -34,18 +34,13 @@ class TransferControllerTest {
     private MockMvc mvc;
     private final FakeWalletRepository wallets = new FakeWalletRepository();
     private final FakeTransferRepository transfers = new FakeTransferRepository();
-    private final AtomicReference<TransferOutcome> engineResult = new AtomicReference<>();
-    private final AtomicReference<RuntimeException> engineThrows = new AtomicReference<>();
+    private final com.paytm.wallet.support.FakeTransferEngine engine =
+            new com.paytm.wallet.support.FakeTransferEngine();
+    private final AtomicReference<TransferOutcome> engineResult = engine.result;
+    private final AtomicReference<RuntimeException> engineThrows = engine.error;
 
     private UUID aliceWallet;
     private UUID bobWallet;
-
-    private final TransferEngine engine = request -> {
-        if (engineThrows.get() != null) {
-            throw engineThrows.get();
-        }
-        return engineResult.get();
-    };
 
     @BeforeEach
     void setUp() {
@@ -54,7 +49,8 @@ class TransferControllerTest {
         aliceWallet = wallets.findByUserId("alice").orElseThrow().id();
         bobWallet = wallets.findByUserId("bob").orElseThrow().id();
 
-        TransferService service = new TransferService(engine, transfers, wallets);
+        TransferService service = new TransferService(engine, transfers, wallets,
+                new com.paytm.wallet.observability.WalletMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
         ObjectMapper mapper = new ObjectMapper()
                 .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
                 .setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);

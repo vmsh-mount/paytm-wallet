@@ -46,7 +46,7 @@ at the same instant — total balance is unchanged and no balance goes negative.
 - [ ] `A >= 0 && B >= 0 && C >= 0`.
 - [ ] Every response is `201` (COMPLETED or DECLINED) — no `5xx`.
 - [ ] `count(HTTP 500) == 0` and **no `40P01` / deadlock** in logs.
-- [ ] `wallet_transfers_created_total` + `wallet_transfers_declined_total`
+- [ ] `wallet_transfers_completed_total` + `wallet_transfers_declined_total`
       increased by exactly `ROUNDS` combined.
 - [ ] (local) mid-run sampling probe: no `GET /wallets` ever returns a negative
       balance.

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>paytm-wallet · live metrics</title>
+<style>
+  :root { color-scheme: light dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  body { margin: 0; padding: 24px; background: #0b0e14; color: #e6e6e6; }
+  h1 { font-size: 15px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #8b98a9; margin: 0 0 4px; }
+  .sub { font-size: 12px; color: #5c6773; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; max-width: 1100px; }
+  .tile { background: #131722; border: 1px solid #1f2430; border-radius: 10px; padding: 16px 18px; }
+  .tile .label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #6b7684; }
+  .tile .value { font-size: 30px; font-weight: 600; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .tile .unit { font-size: 13px; color: #6b7684; margin-left: 4px; font-weight: 400; }
+  .tile.warn .value { color: #e5b567; }
+  .tile.bad  .value { color: #e0575b; }
+  .foot { margin-top: 22px; font-size: 12px; color: #5c6773; }
+  a { color: #6ea8fe; }
+</style>
+</head>
+<body>
+  <h1>paytm-wallet — live metrics</h1>
+  <div class="sub">polling <code>/metrics</code> every 3 s · no external requests · <span id="ts">—</span></div>
+  <div class="grid" id="grid"></div>
+  <div class="foot">
+    RED: request rate + latency p99 + error % from <code>http_server_requests_seconds</code>.
+    Domain counters from <code>wallet_*</code>. Raw: <a href="/metrics">/metrics</a>.
+  </div>
+
+<script>
+const TILES = [
+  { id: 'rate',      label: 'request rate',        unit: 'req/s' },
+  { id: 'p99',       label: 'http p99 latency',    unit: 'ms' },
+  { id: 'errpct',    label: 'error rate (5xx)',    unit: '%' },
+  { id: 'completed',   label: 'transfers completed',   unit: '' },
+  { id: 'declined',  label: 'declined (funds)',    unit: '' },
+  { id: 'replay',    label: 'idempotent replays',  unit: '' },
+  { id: 'conflict',  label: 'idempotency 409s',    unit: '' },
+  { id: 'txp99',     label: 'transfer p99',        unit: 'ms' },
+  { id: 'retries',   label: 'serializable retries',unit: '' },
+];
+const grid = document.getElementById('grid');
+for (const t of TILES) {
+  grid.insertAdjacentHTML('beforeend',
+    `<div class="tile" id="tile-${t.id}"><div class="label">${t.label}</div>
+     <div class="value"><span id="v-${t.id}">–</span><span class="unit">${t.unit}</span></div></div>`);
+}
+
+// minimal prometheus text parser -> [{name, labels:{}, value}]
+function parse(text) {
+  const out = [];
+  for (const line of text.split('\n')) {
+    if (!line || line[0] === '#') continue;
+    const m = line.match(/^([a-zA-Z_:][\w:]*)(\{[^}]*\})?\s+([-\d.eE+]+|NaN)\s*$/);
+    if (!m) continue;
+    const labels = {};
+    if (m[2]) for (const p of m[2].slice(1, -1).matchAll(/([\w]+)="([^"]*)"/g)) labels[p[1]] = p[2];
+    out.push({ name: m[1], labels, value: parseFloat(m[3]) });
+  }
+  return out;
+}
+const sum = (rows, pred) => rows.filter(pred).reduce((a, r) => a + (isFinite(r.value) ? r.value : 0), 0);
+const maxq = (rows, name, q) => Math.max(0, ...rows
+  .filter(r => r.name === name && r.labels.quantile === q && isFinite(r.value)).map(r => r.value));
+
+let prev = null, prevT = 0;
+function render(rows, now) {
+  const reqCount = sum(rows, r => r.name === 'http_server_requests_seconds_count');
+  const rate = prev !== null && now > prevT ? (reqCount - prev) / ((now - prevT) / 1000) : 0;
+  prev = reqCount; prevT = now;
+
+  const err = sum(rows, r => r.name === 'http_server_requests_seconds_count' && /^5/.test(r.labels.status || ''));
+  const errPct = reqCount ? (err / reqCount) * 100 : 0;
+
+  set('rate', rate.toFixed(1));
+  set('p99', (maxq(rows, 'http_server_requests_seconds', '0.99') * 1000).toFixed(1));
+  set('errpct', errPct.toFixed(2), errPct > 1 ? (errPct > 5 ? 'bad' : 'warn') : '');
+  set('completed',  sum(rows, r => r.name === 'wallet_transfers_completed_total').toFixed(0));
+  set('declined', sum(rows, r => r.name === 'wallet_transfers_declined_total').toFixed(0));
+  set('replay',   sum(rows, r => r.name === 'wallet_transfers_idempotent_replay_total').toFixed(0));
+  set('conflict', sum(rows, r => r.name === 'wallet_transfers_conflict_total').toFixed(0), 0);
+  set('txp99', (maxq(rows, 'wallet_transfer_duration_seconds', '0.99') * 1000).toFixed(1));
+  set('retries',  sum(rows, r => r.name === 'wallet_transfer_retries_total').toFixed(0));
+  document.getElementById('ts').textContent = new Date(now).toLocaleTimeString();
+}
+function set(id, v, cls) {
+  document.getElementById('v-' + id).textContent = v;
+  const tile = document.getElementById('tile-' + id);
+  tile.className = 'tile' + (cls ? ' ' + cls : '');
+}
+async function tick() {
+  try {
+    const res = await fetch('/metrics', { headers: { Accept: 'text/plain' } });
+    render(parse(await res.text()), Date.now());
+  } catch (e) { document.getElementById('ts').textContent = 'scrape failed: ' + e; }
+}
+tick();
+setInterval(tick, 3000);
+</script>
+</body>
+</html>

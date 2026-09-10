@@ -26,4 +26,7 @@ public interface TransferEngine {
      *         key was already applied — the stored transfer marked {@code replayed}
      */
     TransferOutcome execute(TransferRequest request);
+
+    /** Which of the three engines this is — for metric tags and logs. */
+    Engine engineType();
 }

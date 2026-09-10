@@ -29,13 +29,20 @@ public abstract class AbstractJdbcTransferEngine implements TransferEngine {
     protected final JdbcTemplate jdbc;
     protected final WalletMetrics metrics;
     protected final TransactionTemplate tx;
+    private final Engine engineType;
 
     protected AbstractJdbcTransferEngine(JdbcTemplate jdbc, PlatformTransactionManager txManager,
-                                         WalletMetrics metrics, int isolationLevel) {
+                                         WalletMetrics metrics, Engine engineType, int isolationLevel) {
         this.jdbc = jdbc;
         this.metrics = metrics;
+        this.engineType = engineType;
         this.tx = new TransactionTemplate(txManager);
         this.tx.setIsolationLevel(isolationLevel);
+    }
+
+    @Override
+    public Engine engineType() {
+        return engineType;
     }
 
     @Override
@@ -128,7 +135,7 @@ public abstract class AbstractJdbcTransferEngine implements TransferEngine {
         // emitted after the INSERT commits its row, so a rolled-back attempt logs nothing
         DomainEvents.transferDebited(t.id(), r.fromWalletId(), r.amountPaise(), fromBalanceAfter);
         DomainEvents.transferCredited(t.id(), r.toWalletId(), r.amountPaise(), toBalanceAfter);
-        metrics.transferCreated();
+        metrics.transferCompleted();
         return TransferOutcome.fresh(t);
     }
 
@@ -145,6 +152,7 @@ public abstract class AbstractJdbcTransferEngine implements TransferEngine {
         String fingerprint = RequestFingerprint.of(r.fromWalletId(), r.toWalletId(), r.amountPaise());
         if (!fingerprint.equals(existing.requestFingerprint())) {
             DomainEvents.conflict(r.idempotencyKey());
+            metrics.conflict();
             throw new DomainExceptions.IdempotencyConflict(
                     "idempotency_key already used for a different transfer");
         }
