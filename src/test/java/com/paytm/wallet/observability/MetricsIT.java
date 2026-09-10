@@ -59,8 +59,8 @@ class MetricsIT extends AbstractPostgresIT {
         for (int i = 0; i < 10; i++) {                         // 10 completed
             transfer(a, b, 100, "m-c" + i + "-" + UUID.randomUUID());
         }
-        for (int i = 0; i < 3; i++) {                          // 3 declined (b has no funds)
-            transfer(b, a, 500, "m-d" + i + "-" + UUID.randomUUID());
+        for (int i = 0; i < 3; i++) {                          // 3 declined — way over b's balance
+            transfer(b, a, 10_000_000, "m-d" + i + "-" + UUID.randomUUID());
         }
         String replayKey = "m-replay-" + UUID.randomUUID();
         transfer(a, b, 100, replayKey);                        // 1 completed
