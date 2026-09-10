@@ -1,0 +1,193 @@
+openapi: 3.0.3
+info:
+  title: Paytm Wallet & P2P Transfer
+  version: 0.1.0
+  description: >
+    Wallet get-or-create and peer-to-peer transfers. Money is integer paise.
+    Auth is a bearer token per user (`Authorization: Bearer <token>`).
+    Every error response is `{error, message, correlation_id}` and the
+    `correlation_id` matches the `X-Correlation-Id` response header.
+
+servers:
+  - url: http://localhost:8080
+
+security:
+  - bearerAuth: []
+
+paths:
+  /wallets:
+    post:
+      summary: Get or create a wallet for a user
+      description: >
+        Idempotent by nature — `user_id` is the key. Always `200`; the caller
+        cannot tell (or care) whether the wallet was just created.
+      operationId: getOrCreateWallet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWalletRequest' }
+      responses:
+        '200':
+          description: The user's wallet
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WalletResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /wallets/{id}:
+    get:
+      summary: Current balance
+      operationId: getWallet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The wallet
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WalletResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /transfers:
+    post:
+      summary: Move money between two wallets
+      description: |
+        Status codes:
+
+        | Case | Code |
+        |------|------|
+        | completed (fresh) | `201` |
+        | declined — insufficient funds (fresh) | `201` |
+        | idempotent replay (same key + body) | `200` |
+        | same key, different body | `409` |
+        | validation failure | `400` |
+        | caller not owner of `from` | `403` |
+        | `from` / `to` wallet unknown | `404` |
+
+        A **declined** transfer is a successful call reporting a business
+        outcome — never a `4xx`.
+      operationId: createTransfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTransferRequest' }
+      responses:
+        '201':
+          description: Fresh transfer (COMPLETED or DECLINED)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransferResponse' }
+        '200':
+          description: Idempotent replay — the stored transfer
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransferResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /transfers/{id}:
+    get:
+      summary: Transfer status
+      operationId: getTransfer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The transfer
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransferResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    CreateWalletRequest:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: { type: string, minLength: 1 }
+
+    WalletResponse:
+      type: object
+      required: [id, balance_paise]
+      properties:
+        id: { type: string, format: uuid }
+        balance_paise: { type: integer, format: int64, minimum: 0 }
+
+    CreateTransferRequest:
+      type: object
+      required: [from, to, amount_paise, idempotency_key]
+      properties:
+        from: { type: string, format: uuid }
+        to: { type: string, format: uuid }
+        amount_paise: { type: integer, format: int64, minimum: 1 }
+        idempotency_key: { type: string, minLength: 1, maxLength: 200 }
+
+    TransferResponse:
+      type: object
+      required: [id, from, to, amount_paise, status]
+      properties:
+        id: { type: string, format: uuid }
+        from: { type: string, format: uuid }
+        to: { type: string, format: uuid }
+        amount_paise: { type: integer, format: int64 }
+        status: { type: string, enum: [COMPLETED, DECLINED] }
+        decline_reason:
+          type: string
+          nullable: true
+          description: Present only when status is DECLINED
+          example: insufficient_funds
+
+    ErrorResponse:
+      type: object
+      required: [error, message, correlation_id]
+      properties:
+        error: { type: string, example: not_found }
+        message: { type: string }
+        correlation_id: { type: string }
+
+  responses:
+    BadRequest:
+      description: Validation failure
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: Caller does not own the source wallet
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Unknown wallet or transfer
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: idempotency_key reused with a different body
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

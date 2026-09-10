@@ -63,7 +63,7 @@ class InvariantsIT extends AbstractPostgresIT {
     private Transfer transfer(UUID from, UUID to, long amount) {
         return transferService.create(
                 new TransferRequest(from, to, amount, UUID.randomUUID().toString()),
-                owner.get(from), "it-cid");
+                owner.get(from), "it-cid").transfer();
     }
 
     private long balance(UUID walletId) {
@@ -311,8 +311,8 @@ class InvariantsIT extends AbstractPostgresIT {
         UUID a = seedWallet("A", 100), b = seedWallet("B", 0);
         String key = "seq-" + UUID.randomUUID();
 
-        Transfer first = transferService.create(keyed(a, b, 30, key), owner.get(a), "cid");
-        Transfer second = transferService.create(keyed(a, b, 30, key), owner.get(a), "cid");
+        Transfer first = transferService.create(keyed(a, b, 30, key), owner.get(a), "cid").transfer();
+        Transfer second = transferService.create(keyed(a, b, 30, key), owner.get(a), "cid").transfer();
 
         assertThat(second).isEqualTo(first);          // byte-identical replay
         assertThat(balance(a)).isEqualTo(70);         // one debit only
@@ -336,7 +336,7 @@ class InvariantsIT extends AbstractPostgresIT {
                 futures.add(pool.submit(() -> {
                     barrier.await(10, TimeUnit.SECONDS);
                     try {
-                        results.add(transferService.create(keyed(a, b, amount, key), owner.get(a), "cid"));
+                        results.add(transferService.create(keyed(a, b, amount, key), owner.get(a), "cid").transfer());
                     } catch (Throwable t) {
                         errors.add(t);
                     }
@@ -379,8 +379,8 @@ class InvariantsIT extends AbstractPostgresIT {
         UUID a = seedWallet("A", 10), b = seedWallet("B", 0);
         String key = "declined-" + UUID.randomUUID();
 
-        Transfer first = transferService.create(keyed(a, b, 50, key), owner.get(a), "cid");
-        Transfer replay = transferService.create(keyed(a, b, 50, key), owner.get(a), "cid");
+        Transfer first = transferService.create(keyed(a, b, 50, key), owner.get(a), "cid").transfer();
+        Transfer replay = transferService.create(keyed(a, b, 50, key), owner.get(a), "cid").transfer();
 
         assertThat(first.status()).isEqualTo(Transfer.Status.DECLINED);
         assertThat(replay).isEqualTo(first);

@@ -2,6 +2,7 @@ package com.paytm.wallet.service;
 
 import com.paytm.wallet.domain.Transfer;
 import com.paytm.wallet.service.transfer.TransferEngine;
+import com.paytm.wallet.service.transfer.TransferOutcome;
 import com.paytm.wallet.service.transfer.TransferRequest;
 import com.paytm.wallet.support.FakeTransferRepository;
 import com.paytm.wallet.support.FakeWalletRepository;
@@ -19,7 +20,7 @@ class TransferServiceTest {
     private final FakeWalletRepository walletRepo = new FakeWalletRepository();
     private final FakeTransferRepository transferRepo = new FakeTransferRepository();
 
-    private final AtomicReference<Transfer> engineResult = new AtomicReference<>();
+    private final AtomicReference<TransferOutcome> engineResult = new AtomicReference<>();
     private final AtomicReference<RuntimeException> engineThrows = new AtomicReference<>();
     private final AtomicReference<TransferRequest> engineSaw = new AtomicReference<>();
     private final TransferEngine engine = (request, correlationId) -> {
@@ -82,11 +83,12 @@ class TransferServiceTest {
     void returns_the_engine_outcome() {
         UUID a = wallet("alice");
         UUID b = wallet("bob");
-        engineResult.set(canned(a, b, 30, Transfer.Status.COMPLETED, null));
+        engineResult.set(TransferOutcome.fresh(canned(a, b, 30, Transfer.Status.COMPLETED, null)));
 
-        Transfer result = service.create(req(a, b, 30), "alice", "cid");
+        TransferOutcome result = service.create(req(a, b, 30), "alice", "cid");
 
-        assertThat(result.status()).isEqualTo(Transfer.Status.COMPLETED);
+        assertThat(result.transfer().status()).isEqualTo(Transfer.Status.COMPLETED);
+        assertThat(result.replayed()).isFalse();
         assertThat(engineSaw.get().amountPaise()).isEqualTo(30);
     }
 
