@@ -30,6 +30,14 @@
 - Same key, different body ⇒ `409` via `request_fingerprint` mismatch (hash of from+to+amount).
 - _Race between two first-time requests with the same key:_ TODO (unique-violation ⇒ loser re-reads and returns winner's result).
 
+## Race-free get-or-create (#4)
+
+- `POST /wallets` = `INSERT INTO wallets (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING`, then an **unconditional** `SELECT ... WHERE user_id = ?`. The `UNIQUE(user_id)` index is the single arbiter — the DB never creates a second row; a concurrent loser gets 0 rows affected and falls through to the same `SELECT`, so all N callers return the same wallet id. `userId` *is* the idempotency key here; no client key needed.
+- Always returns **`200`** with `{id, balance_paise}` — "get or create" is one logical operation and the caller can't distinguish (or care) which half ran. New balance is `0`.
+- _Rejected — `SELECT` then `INSERT` in app code:_ classic TOCTOU; two callers both read "absent", both insert, one eats a unique violation.
+- _Rejected — advisory lock / `SERIALIZABLE`:_ heavier, and the unique index already gives the guarantee for free.
+- Verified by `InvariantsIT.concurrent_get_or_create_yields_one_wallet`: 50 threads released from a `CyclicBarrier`, asserts one distinct id across all 50 responses, `count(*) == 1`, no 5xx.
+
 ## Auth
 
 - Auth sophistication is explicitly not graded, so it is deliberately minimal: `Authorization: Bearer <token>` → `userId` via a static `token:userId` map from `wallet.auth.tokens` (`AUTH_TOKENS`, a `sync:false` secret on Render). No DB table, no issuance / refresh / expiry / JWT.
