@@ -15,7 +15,7 @@ its acceptance criteria and test plan are green and the change is committed.
 |---|------|--------------|------------|--------|
 | [00](TASK-00-build-tooling-ci.md) | Build, tooling & CI baseline | — | — | Done |
 | [01](TASK-01-data-model-migrations.md) | Data model & migrations | #1 #2 #3 #4 | 00 | Done |
-| [02](TASK-02-bearer-auth.md) | Bearer-token auth & request context | — | 00 | Not started |
+| [02](TASK-02-bearer-auth.md) | Bearer-token auth & request context | — | 00 | Done |
 | [03](TASK-03-wallet-get-or-create.md) | Wallet get-or-create + balance read | #4 | 01 02 | Not started |
 | [04](TASK-04-transfer-engine-conditional.md) | Transfer engine v1 — conditional debit | #1 #2 | 01 03 | Not started |
 | [05](TASK-05-idempotency.md) | Idempotency layer | #3 | 04 | Not started |

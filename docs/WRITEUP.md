@@ -30,6 +30,13 @@
 - Same key, different body ⇒ `409` via `request_fingerprint` mismatch (hash of from+to+amount).
 - _Race between two first-time requests with the same key:_ TODO (unique-violation ⇒ loser re-reads and returns winner's result).
 
+## Auth
+
+- Auth sophistication is explicitly not graded, so it is deliberately minimal: `Authorization: Bearer <token>` → `userId` via a static `token:userId` map from `wallet.auth.tokens` (`AUTH_TOKENS`, a `sync:false` secret on Render). No DB table, no issuance / refresh / expiry / JWT.
+- A ~30-line servlet `Filter`, **not Spring Security** — mapping one header to one string does not justify Security's autoconfig and filter-chain surface. Reconsider only if the reviewer wants method-level security (noted).
+- Filter order: `CorrelationIdFilter` → `AuthFilter`. Unknown/missing/malformed token → `401` `{error,message,correlation_id}`; `/actuator/**` stays open. Token compared constant-time (`MessageDigest.isEqual`) against every entry; only the resolved `userId` is logged / put in MDC, never the token.
+- The caller-owns-the-source-wallet check is **not** here — it needs the wallet row, so it lives in `TransferService` (TASK-06). The filter only authenticates.
+
 ## Consistency vs availability
 
 - Single Postgres, synchronous commits. Chosen **CP**: a partitioned / unreachable DB returns `5xx` rather than serving a possibly-stale balance or accepting a write it cannot durably record.
@@ -44,6 +51,8 @@
 | Three swappable transfer engines | ✅ | |
 | Maven wrapper (pinned 3.9.9) + Testcontainers-in-CI over H2 | ✅ | |
 | GitHub Actions YAML, `.editorconfig` contents | | ✅ |
+| Servlet filter (not Spring Security), static token map, `/actuator` allowlist | ✅ | |
+| `RequestContext` as ThreadLocal, 401 JSON shape | | ✅ |
 | ... | | |
 
 ## Build & tooling

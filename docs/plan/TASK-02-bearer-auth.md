@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Not started |
+| **Status** | Done |
 | **Branch** | `task/02-bearer-auth` |
 | **Depends on** | TASK-00 |
 | **Invariant(s)** | — (but enables the ownership check in TASK-06) |
