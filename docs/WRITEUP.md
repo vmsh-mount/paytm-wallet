@@ -4,10 +4,16 @@
 
 ## Data model
 
-- `wallets(id, user_id UNIQUE, balance_paise BIGINT >= 0, created_at)`
-- `transfers(id, from_wallet_id, to_wallet_id, amount_paise > 0, idempotency_key UNIQUE, request_fingerprint, status, decline_reason, created_at)`
-- Money = integer paise everywhere. No floats, no `NUMERIC` rupees.
-- _Why no separate ledger/entries table for R2:_ TODO (balance column is source of truth; note the trade-off vs double-entry ledger).
+- `wallets(id, user_id UNIQUE, balance_paise BIGINT CHECK >= 0, created_at)`
+- `transfers(id, from_wallet_id FK, to_wallet_id FK, amount_paise CHECK > 0, idempotency_key UNIQUE, request_fingerprint, status, decline_reason, created_at)` + `CHECK (from_wallet_id <> to_wallet_id)` + `CHECK (status <> 'DECLINED' OR decline_reason IS NOT NULL)`
+- Money = integer **paise** everywhere, stored as `bigint` (max ≈ 9.2×10¹⁸ paise — no realistic overflow). No floats, no `NUMERIC` rupees (invites float thinking, slower).
+- The V1 migration is **frozen** (header comment); Flyway validates checksums on boot, so drift fails fast. Further changes go to `V2+`.
+- Three of the four invariants are made *impossible to violate* by the schema alone: overdraft (`CHECK balance_paise >= 0`), duplicate wallet (`UNIQUE user_id`), duplicate idempotency key (`UNIQUE idempotency_key`). Conservation is the one that still needs the service layer (debit+credit in one tx); the FKs at least guarantee both wallets exist.
+- `request_fingerprint` = lowercase hex SHA-256 of `from|to|amount_paise`, stored on the row so a same-key replay can be checked without trusting the client body (TASK-05's 409 path).
+
+**Why a balance column, not a double-entry ledger (chosen for R2).** `wallets.balance_paise` is the single source of truth, updated transactionally. One row lock per wallet; conservation is trivial when debit and credit share a transaction; every balance read is a single-row lookup.
+
+- _Rejected — double-entry ledger_ (`entries(transfer_id, wallet_id, delta)`, balance = `SUM(delta)`): auditable and the "real" bank design, but every balance read becomes an aggregate or needs a maintained snapshot, and no-overdraft becomes "sum-for-update" — more machinery than this exercise needs. **Scale-up path:** move to this when an audit trail or per-entry reconciliation is required; keep the balance column as a materialised snapshot.
 
 ## Simplest-correct mechanism (conservation + no-overdraft)
 
