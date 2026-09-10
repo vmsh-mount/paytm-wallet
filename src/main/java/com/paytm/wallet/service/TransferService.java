@@ -2,13 +2,14 @@ package com.paytm.wallet.service;
 
 import com.paytm.wallet.domain.Transfer;
 import com.paytm.wallet.domain.Wallet;
+import com.paytm.wallet.observability.CorrelationIdFilter;
+import com.paytm.wallet.observability.DomainEvents;
 import com.paytm.wallet.repo.TransferRepository;
 import com.paytm.wallet.repo.WalletRepository;
 import com.paytm.wallet.service.transfer.TransferEngine;
 import com.paytm.wallet.service.transfer.TransferOutcome;
 import com.paytm.wallet.service.transfer.TransferRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -27,8 +28,6 @@ import java.util.UUID;
 @Service
 public class TransferService {
 
-    private static final Logger log = LoggerFactory.getLogger(TransferService.class);
-
     private final TransferEngine engine;
     private final TransferRepository transfers;
     private final WalletRepository wallets;
@@ -41,6 +40,22 @@ public class TransferService {
     }
 
     public TransferOutcome create(TransferRequest request, String callerUserId, String correlationId) {
+        // Ensure a correlation id is in the MDC even for direct (non-HTTP) callers,
+        // so every DomainEvents line for this transfer is correlated.
+        boolean ownsMdc = MDC.get(CorrelationIdFilter.MDC_KEY) == null && correlationId != null;
+        if (ownsMdc) {
+            MDC.put(CorrelationIdFilter.MDC_KEY, correlationId);
+        }
+        try {
+            return doCreate(request, callerUserId);
+        } finally {
+            if (ownsMdc) {
+                MDC.remove(CorrelationIdFilter.MDC_KEY);
+            }
+        }
+    }
+
+    private TransferOutcome doCreate(TransferRequest request, String callerUserId) {
         if (request.amountPaise() <= 0) {
             throw new DomainExceptions.InvalidTransfer("amount_paise must be positive");
         }
@@ -56,14 +71,16 @@ public class TransferService {
                     "caller does not own source wallet " + from.id());
         }
 
-        log.atInfo().addKeyValue("event", "transfer.created")
-                .addKeyValue("from_wallet_id", request.fromWalletId())
-                .addKeyValue("to_wallet_id", request.toWalletId())
-                .addKeyValue("amount_paise", request.amountPaise())
-                .addKeyValue("idempotency_key", request.idempotencyKey())
-                .log("transfer requested");
+        DomainEvents.transferReceived(request.fromWalletId(), request.toWalletId(),
+                request.amountPaise(), request.idempotencyKey());
 
-        return engine.execute(request, correlationId);
+        long startNanos = System.nanoTime();
+        TransferOutcome outcome = engine.execute(request);
+        if (!outcome.replayed() && outcome.transfer().status() == Transfer.Status.COMPLETED) {
+            DomainEvents.transferCompleted(outcome.transfer().id(), request.amountPaise(),
+                    (System.nanoTime() - startNanos) / 1_000_000.0);
+        }
+        return outcome;
     }
 
     public Transfer get(UUID transferId) {

@@ -2,11 +2,10 @@ package com.paytm.wallet.service.transfer;
 
 import com.paytm.wallet.domain.Transfer;
 import com.paytm.wallet.idempotency.RequestFingerprint;
+import com.paytm.wallet.observability.DomainEvents;
 import com.paytm.wallet.observability.WalletMetrics;
 import com.paytm.wallet.repo.RowMappers;
 import com.paytm.wallet.service.DomainExceptions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -27,8 +26,6 @@ import java.util.stream.Stream;
  */
 public abstract class AbstractJdbcTransferEngine implements TransferEngine {
 
-    private static final Logger log = LoggerFactory.getLogger(AbstractJdbcTransferEngine.class);
-
     protected final JdbcTemplate jdbc;
     protected final WalletMetrics metrics;
     protected final TransactionTemplate tx;
@@ -42,7 +39,7 @@ public abstract class AbstractJdbcTransferEngine implements TransferEngine {
     }
 
     @Override
-    public TransferOutcome execute(TransferRequest request, String correlationId) {
+    public TransferOutcome execute(TransferRequest request) {
         try {
             return attempt(request);
         } catch (DuplicateKeyException raced) {
@@ -65,9 +62,10 @@ public abstract class AbstractJdbcTransferEngine implements TransferEngine {
 
     /**
      * Move {@code amount} from {@code from} to {@code to} with no overdraft and no
-     * lost update, then call {@link #completed(TransferRequest)} /
-     * {@link #declined(TransferRequest)}. Runs inside the transaction opened by
-     * {@link #attempt}.
+     * lost update, then return {@link #completed} / {@link #declined}. Runs inside
+     * the transaction opened by {@link #attempt}. Implementations use
+     * {@code RETURNING balance_paise} on the balance {@code UPDATE}s so no extra
+     * {@code SELECT} is needed for the {@code *_balance_after} audit fields.
      */
     protected abstract TransferOutcome moveMoney(TransferRequest r);
 
@@ -91,24 +89,52 @@ public abstract class AbstractJdbcTransferEngine implements TransferEngine {
         return jdbc.queryForObject("SELECT balance_paise FROM wallets WHERE id = ?", Long.class, walletId);
     }
 
-    protected TransferOutcome completed(TransferRequest r) {
-        log.atInfo().addKeyValue("event", "transfer.debited")
-                .addKeyValue("wallet_id", r.fromWalletId()).addKeyValue("amount_paise", r.amountPaise())
-                .log("wallet debited");
-        log.atInfo().addKeyValue("event", "transfer.credited")
-                .addKeyValue("wallet_id", r.toWalletId()).addKeyValue("amount_paise", r.amountPaise())
-                .log("wallet credited");
+    /**
+     * {@code UPDATE wallets SET balance_paise = balance_paise - :amt WHERE id = :from
+     * AND balance_paise >= :amt RETURNING balance_paise}. Empty result ⇒ overdraft ⇒
+     * {@code null}. One statement does the check, the debit, and the audit read.
+     */
+    protected Long debitConditional(UUID from, long amount) {
+        return jdbc.query(
+                "UPDATE wallets SET balance_paise = balance_paise - ? "
+                + "WHERE id = ? AND balance_paise >= ? RETURNING balance_paise",
+                rs -> rs.next() ? rs.getLong(1) : null,
+                amount, from, amount);
+    }
+
+    /** Unconditional debit (source already checked / locked), returns the new balance. */
+    protected long debit(UUID from, long amount) {
+        return jdbc.queryForObject(
+                "UPDATE wallets SET balance_paise = balance_paise - ? WHERE id = ? RETURNING balance_paise",
+                Long.class, amount, from);
+    }
+
+    /** Credit, returns the new balance. */
+    protected long credit(UUID to, long amount) {
+        return jdbc.queryForObject(
+                "UPDATE wallets SET balance_paise = balance_paise + ? WHERE id = ? RETURNING balance_paise",
+                Long.class, amount, to);
+    }
+
+    /** Set an exact balance (serializable engine's blind write), returns it back. */
+    protected long setBalance(UUID walletId, long value) {
+        return jdbc.queryForObject(
+                "UPDATE wallets SET balance_paise = ? WHERE id = ? RETURNING balance_paise",
+                Long.class, value, walletId);
+    }
+
+    protected TransferOutcome completed(TransferRequest r, long fromBalanceAfter, long toBalanceAfter) {
         Transfer t = insertTransfer(r, Transfer.Status.COMPLETED, null);
+        // emitted after the INSERT commits its row, so a rolled-back attempt logs nothing
+        DomainEvents.transferDebited(t.id(), r.fromWalletId(), r.amountPaise(), fromBalanceAfter);
+        DomainEvents.transferCredited(t.id(), r.toWalletId(), r.amountPaise(), toBalanceAfter);
         metrics.transferCreated();
         return TransferOutcome.fresh(t);
     }
 
     protected TransferOutcome declined(TransferRequest r) {
-        log.atInfo().addKeyValue("event", "transfer.declined")
-                .addKeyValue("from_wallet_id", r.fromWalletId()).addKeyValue("to_wallet_id", r.toWalletId())
-                .addKeyValue("amount_paise", r.amountPaise()).addKeyValue("reason", "insufficient_funds")
-                .log("transfer declined");
         Transfer t = insertTransfer(r, Transfer.Status.DECLINED, "insufficient_funds");
+        DomainEvents.transferDeclined(t.id(), r.fromWalletId(), r.amountPaise(), "insufficient_funds");
         metrics.declinedInsufficientFunds();
         return TransferOutcome.fresh(t);
     }
@@ -118,18 +144,11 @@ public abstract class AbstractJdbcTransferEngine implements TransferEngine {
     private TransferOutcome replayOrConflict(Transfer existing, TransferRequest r) {
         String fingerprint = RequestFingerprint.of(r.fromWalletId(), r.toWalletId(), r.amountPaise());
         if (!fingerprint.equals(existing.requestFingerprint())) {
-            log.atWarn().addKeyValue("event", "transfer.idempotency_conflict")
-                    .addKeyValue("idempotency_key", r.idempotencyKey())
-                    .addKeyValue("transfer_id", existing.id())
-                    .log("idempotency key reused with a different body");
+            DomainEvents.conflict(r.idempotencyKey());
             throw new DomainExceptions.IdempotencyConflict(
                     "idempotency_key already used for a different transfer");
         }
-        log.atInfo().addKeyValue("event", "transfer.idempotent_replay")
-                .addKeyValue("idempotency_key", r.idempotencyKey())
-                .addKeyValue("transfer_id", existing.id())
-                .addKeyValue("status", existing.status().name())
-                .log("idempotent replay");
+        DomainEvents.idempotentReplay(existing.id(), r.idempotencyKey());
         metrics.idempotentReplay();
         return TransferOutcome.replay(existing);
     }

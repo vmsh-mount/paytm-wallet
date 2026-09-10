@@ -25,16 +25,16 @@
 - **Deadlock-freedom:** the pre-lock is sorted by wallet id, so `A→B` and `B→A` running together both try to lock `min(A,B)` first — one waits, no ABBA cycle. Without the sorted pre-lock, `UPDATE from` then `UPDATE to` could deadlock (`40P01`) and force a retry loop; sorting removes the possibility rather than recovering from it.
 - **Why `READ COMMITTED` is enough:** we touch exactly two rows by primary key, both write-locked; there is no phantom or read-skew surface. The `CHECK (balance_paise >= 0)` is defence-in-depth and should never fire given the predicate.
 - **Conservation proof sketch:** `-amt` and `+amt` of the same integer, committed together; `wallets.balance_paise` has no other writer; no partial commit. Σ is invariant.
-All three are implemented behind `TransferEngine` (`wallet.transfer.engine`, default `conditional-update`) and **all three pass the same `InvariantsIT` / `EngineParityIT` matrix** — correctness is not the differentiator. Cost under contention is; from `bench/RESULTS.md` (16 threads, 8 wallets, 10 s, commit `c45300f`):
+All three are implemented behind `TransferEngine` (`wallet.transfer.engine`, default `conditional-update`) and **all three pass the same `InvariantsIT` / `EngineParityIT` matrix** — correctness is not the differentiator. Cost under contention is; from `bench/RESULTS.md` (16 threads, 8 wallets, 10 s, local Postgres — see the file for the exact commit and re-run instructions):
 
 | engine | throughput/s | p50 | p99 | retries | 503s | Σ conserved |
 |--------|-------------:|----:|----:|--------:|-----:|:-----------:|
-| conditional-update | **7,910** | 1.0 ms | 14 ms | 0 | 0 | ✓ |
-| select-for-update | 7,499 | 1.0 ms | 12 ms | 0 | 0 | ✓ |
-| serializable | 3,166 | 0.3 ms | 19 ms | 1,405 | 124 | ✓ |
+| conditional-update | **~7,800** | 1.0 ms | ~14 ms | 0 | 0 | ✓ |
+| select-for-update | ~7,300 | 1.0 ms | ~12 ms | 0 | 0 | ✓ |
+| serializable | ~3,400 | 0.3 ms | tens of ms | thousands | ~10–15 | ✓ |
 
 - **Rejected — `SELECT … FOR UPDATE` + app-side check:** essentially the same throughput as the chosen engine (it holds the same two row locks for the same window), but an extra round trip to read the balance and a wider check-then-act than one conditional `UPDATE`. No reason to prefer it.
-- **Rejected — `SERIALIZABLE`:** ~2.4× slower here and the only engine that shed load — 1,405 retries and 124 `SerializationExhausted` → `503` under this contention (retry budget 5–20). It moves the reasoning surface to the whole transaction's read/write set and adds a backoff/retry policy to defend. Correct, but more machinery for less throughput.
+- **Rejected — `SERIALIZABLE`:** ~2.3× slower here and the only engine that shed load — thousands of retries and a handful of `SerializationExhausted` → `503` under this contention (retry budget 20), plus a p99 tail blown out by backoff waits. It moves the reasoning surface to the whole transaction's read/write set and adds a backoff/retry policy to defend. Correct, but more machinery for less throughput.
 - Conditional-update wins on the shortest critical section (one statement does check + debit) and zero retry machinery. Verified by `InvariantsIT`: 200 concurrent mixed transfers (incl. A↔B simultaneously) → `SUM` exactly unchanged, `MIN` ≥ 0, zero deadlocks; a 100-way race on a wallet funded for 5 → exactly 5 COMPLETED.
 
 ## Where idempotency lives

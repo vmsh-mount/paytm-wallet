@@ -22,8 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SelectForUpdateEngineTest {
 
     private long sourceBalance = 1_000L;
-    private final List<String> updates = new ArrayList<>();
+    private final List<String> statements = new ArrayList<>();
 
+    @SuppressWarnings("unchecked")
     private final JdbcTemplate fakeJdbc = new JdbcTemplate() {
         @Override
         public void query(String sql, RowCallbackHandler rch, Object... args) { /* FOR UPDATE lock */ }
@@ -35,17 +36,14 @@ class SelectForUpdateEngineTest {
 
         @Override
         public <T> T queryForObject(String sql, Class<T> type, Object... args) {
-            return type.cast(sourceBalance); // balanceOf
+            if (sql.startsWith("SELECT")) {
+                return type.cast(sourceBalance); // balanceOf(from) — the pre-check read
+            }
+            statements.add(sql); // debit / credit RETURNING
+            return type.cast(sourceBalance);
         }
 
         @Override
-        public int update(String sql, Object... args) {
-            updates.add(sql);
-            return 1;
-        }
-
-        @Override
-        @SuppressWarnings("unchecked")
         public <T> T queryForObject(String sql, RowMapper<T> rm, Object... args) {
             return (T) new Transfer(UUID.randomUUID(), (UUID) args[0], (UUID) args[1],
                     (long) args[2], (String) args[3], (String) args[4],
@@ -70,20 +68,21 @@ class SelectForUpdateEngineTest {
     void insufficient_balance_declines_before_any_write() {
         sourceBalance = 50;
 
-        var outcome = engine.execute(req(200), "cid");
+        var outcome = engine.execute(req(200));
 
         assertThat(outcome.transfer().status()).isEqualTo(Transfer.Status.DECLINED);
         assertThat(outcome.transfer().declineReason()).isEqualTo("insufficient_funds");
-        assertThat(updates).as("no balance UPDATE issued").isEmpty();
+        assertThat(statements).as("no balance UPDATE issued").isEmpty();
     }
 
     @Test
     void sufficient_balance_issues_two_updates() {
         sourceBalance = 500;
 
-        var outcome = engine.execute(req(200), "cid");
+        var outcome = engine.execute(req(200));
 
         assertThat(outcome.transfer().status()).isEqualTo(Transfer.Status.COMPLETED);
-        assertThat(updates).hasSize(2); // debit + credit
+        assertThat(statements).hasSize(2); // debit + credit
+        assertThat(statements).allMatch(s -> s.startsWith("UPDATE wallets"));
     }
 }

@@ -23,7 +23,7 @@ class TransferServiceTest {
     private final AtomicReference<TransferOutcome> engineResult = new AtomicReference<>();
     private final AtomicReference<RuntimeException> engineThrows = new AtomicReference<>();
     private final AtomicReference<TransferRequest> engineSaw = new AtomicReference<>();
-    private final TransferEngine engine = (request, correlationId) -> {
+    private final TransferEngine engine = request -> {
         engineSaw.set(request);
         if (engineThrows.get() != null) {
             throw engineThrows.get();

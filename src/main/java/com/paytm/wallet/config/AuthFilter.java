@@ -44,6 +44,8 @@ public class AuthFilter implements Filter {
 
     /** MDC key for the resolved caller; never the token. */
     public static final String MDC_USER_ID = "user_id";
+    /** Request attribute holding the resolved caller — outlives the MDC, so the access log can read it. */
+    public static final String USER_ID_ATTRIBUTE = "wallet.userId";
     private static final String BEARER_PREFIX = "Bearer ";
 
     private static final Logger log = LoggerFactory.getLogger(AuthFilter.class);
@@ -80,6 +82,7 @@ public class AuthFilter implements Filter {
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
         RequestContext.set(userId, correlationId);
         MDC.put(MDC_USER_ID, userId);
+        request.setAttribute(USER_ID_ATTRIBUTE, userId);
         try {
             chain.doFilter(req, res);
         } finally {
