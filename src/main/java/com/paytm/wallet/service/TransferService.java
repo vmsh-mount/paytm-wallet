@@ -5,6 +5,7 @@ import com.paytm.wallet.domain.Wallet;
 import com.paytm.wallet.repo.TransferRepository;
 import com.paytm.wallet.repo.WalletRepository;
 import com.paytm.wallet.service.transfer.TransferEngine;
+import com.paytm.wallet.service.transfer.TransferOutcome;
 import com.paytm.wallet.service.transfer.TransferRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +40,7 @@ public class TransferService {
         this.wallets = wallets;
     }
 
-    public Transfer create(TransferRequest request, String callerUserId, String correlationId) {
+    public TransferOutcome create(TransferRequest request, String callerUserId, String correlationId) {
         if (request.amountPaise() <= 0) {
             throw new DomainExceptions.InvalidTransfer("amount_paise must be positive");
         }

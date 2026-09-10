@@ -25,7 +25,7 @@ public class SelectForUpdateEngine implements TransferEngine {
     }
 
     @Override
-    public Transfer execute(TransferRequest request, String correlationId) {
+    public TransferOutcome execute(TransferRequest request, String correlationId) {
         throw new UnsupportedOperationException("scaffold: SelectForUpdateEngine not implemented");
     }
 }

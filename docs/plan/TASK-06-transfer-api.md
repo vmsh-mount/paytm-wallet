@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Not started |
+| **Status** | Done |
 | **Branch** | `task/06-transfer-api` |
 | **Depends on** | TASK-04, TASK-05 |
 | **Invariant(s)** | #1 #2 #3 (surface) |

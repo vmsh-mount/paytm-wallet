@@ -31,7 +31,26 @@ Build: `./mvnw -B verify` (Maven wrapper pinned to 3.9.9; needs a JDK 21+ and a 
 | `POST` | `/transfers` | move money; body `from,to,amount_paise,idempotency_key` |
 | `GET` | `/transfers/{id}` | transfer status |
 
-Auth: `Authorization: Bearer <token>` → user id, from `AUTH_TOKENS` config.
+Auth: `Authorization: Bearer <token>` → user id, from `AUTH_TOKENS` config. `/actuator/**` is open.
+
+Full contract: [`docs/openapi.yaml`](docs/openapi.yaml).
+
+### `POST /transfers` status codes
+
+| Case | Code | Body |
+|------|------|------|
+| completed (fresh) | `201` | `TransferResponse{status:COMPLETED}` |
+| declined — insufficient funds (fresh) | `201` | `TransferResponse{status:DECLINED, decline_reason}` |
+| idempotent replay (same key + body) | `200` | stored `TransferResponse` |
+| same key, different body | `409` | `ErrorResponse` |
+| validation failure | `400` | `ErrorResponse` |
+| caller not owner of `from` | `403` | `ErrorResponse` |
+| `from` / `to` wallet unknown | `404` | `ErrorResponse` |
+| unexpected | `500` | `ErrorResponse` (correlation id only, no stack) |
+
+A **declined** transfer is a *successful* call reporting a business outcome — not a `4xx`.
+`201` (new) vs `200` (replay) lets a client tell "my write happened now" from "already processed".
+Every error body is `{error, message, correlation_id}`; the id matches the `X-Correlation-Id` response header.
 
 ## Run locally
 

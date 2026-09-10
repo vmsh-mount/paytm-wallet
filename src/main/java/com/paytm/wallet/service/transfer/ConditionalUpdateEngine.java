@@ -52,7 +52,7 @@ public class ConditionalUpdateEngine implements TransferEngine {
     }
 
     @Override
-    public Transfer execute(TransferRequest request, String correlationId) {
+    public TransferOutcome execute(TransferRequest request, String correlationId) {
         try {
             return tx.execute(status -> move(request));
         } catch (DuplicateKeyException raced) {
@@ -62,7 +62,7 @@ public class ConditionalUpdateEngine implements TransferEngine {
         }
     }
 
-    private Transfer move(TransferRequest r) {
+    private TransferOutcome move(TransferRequest r) {
         Transfer existing = findByKey(r.idempotencyKey());
         if (existing != null) {
             return replayOrConflict(existing, r); // pure replay — no wallet lock taken
@@ -86,7 +86,7 @@ public class ConditionalUpdateEngine implements TransferEngine {
                     .log("transfer declined");
             Transfer declined = insertTransfer(r, Transfer.Status.DECLINED, "insufficient_funds");
             metrics.declinedInsufficientFunds();
-            return declined;
+            return TransferOutcome.fresh(declined);
         }
         log.atInfo().addKeyValue("event", "transfer.debited")
                 .addKeyValue("wallet_id", r.fromWalletId()).addKeyValue("amount_paise", amount).log("wallet debited");
@@ -97,10 +97,10 @@ public class ConditionalUpdateEngine implements TransferEngine {
 
         Transfer completed = insertTransfer(r, Transfer.Status.COMPLETED, null);
         metrics.transferCreated();
-        return completed;
+        return TransferOutcome.fresh(completed);
     }
 
-    private Transfer replayOrConflict(Transfer existing, TransferRequest r) {
+    private TransferOutcome replayOrConflict(Transfer existing, TransferRequest r) {
         String fingerprint = RequestFingerprint.of(r.fromWalletId(), r.toWalletId(), r.amountPaise());
         if (!fingerprint.equals(existing.requestFingerprint())) {
             log.atWarn().addKeyValue("event", "transfer.idempotency_conflict")
@@ -116,7 +116,7 @@ public class ConditionalUpdateEngine implements TransferEngine {
                 .addKeyValue("status", existing.status().name())
                 .log("idempotent replay");
         metrics.idempotentReplay();
-        return existing;
+        return TransferOutcome.replay(existing);
     }
 
     /** {@code SELECT ... FOR UPDATE} both rows sorted by id — the deadlock-free lock order. */

@@ -3,6 +3,7 @@ package com.paytm.wallet.api;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import java.util.UUID;
 
@@ -17,7 +18,7 @@ public final class Dtos {
             @NotNull UUID from,
             @NotNull UUID to,
             @Positive long amountPaise,
-            @NotBlank String idempotencyKey) {}
+            @NotBlank @Size(max = 200) String idempotencyKey) {}
 
     public record TransferResponse(
             UUID id,
@@ -25,7 +26,14 @@ public final class Dtos {
             UUID to,
             long amountPaise,
             String status,
-            String declineReason) {}
+            String declineReason) {
+
+        public static TransferResponse of(com.paytm.wallet.domain.Transfer t) {
+            return new TransferResponse(t.id(), t.fromWalletId(), t.toWalletId(),
+                    t.amountPaise(), t.status().name(),
+                    t.declineReason());
+        }
+    }
 
     public record ErrorResponse(String error, String message, String correlationId) {}
 

@@ -21,10 +21,11 @@ import com.paytm.wallet.domain.Transfer;
 public interface TransferEngine {
 
     /**
-     * @param request     validated transfer request
+     * @param request       validated transfer request
      * @param correlationId request correlation id for structured logging
-     * @return the resulting transfer (COMPLETED or DECLINED), or the original
-     *         transfer if this idempotency key was already applied
+     * @return the fresh transfer (COMPLETED or DECLINED), or — if this
+     *         idempotency key was already applied — the stored transfer marked
+     *         {@code replayed}
      */
-    Transfer execute(TransferRequest request, String correlationId);
+    TransferOutcome execute(TransferRequest request, String correlationId);
 }

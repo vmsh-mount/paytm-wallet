@@ -93,10 +93,10 @@ class ConditionalUpdateEngineTest {
     void insufficient_funds_declines_without_crediting() {
         nextUpdateResult = 0; // conditional debit affects no rows
 
-        Transfer result = engine.execute(req(500), "cid");
+        var result = engine.execute(req(500), "cid");
 
-        assertThat(result.status()).isEqualTo(Transfer.Status.DECLINED);
-        assertThat(result.declineReason()).isEqualTo("insufficient_funds");
+        assertThat(result.transfer().status()).isEqualTo(Transfer.Status.DECLINED);
+        assertThat(result.transfer().declineReason()).isEqualTo("insufficient_funds");
         assertThat(updates).hasSize(1);
         assertThat(updates.get(0)).contains("balance_paise - ?");
         assertThat(counter("wallet.transfers.declined")).isEqualTo(1.0);
@@ -106,9 +106,9 @@ class ConditionalUpdateEngineTest {
     void sufficient_funds_debits_then_credits_then_inserts_completed() {
         nextUpdateResult = 1;
 
-        Transfer result = engine.execute(req(30), "cid");
+        var result = engine.execute(req(30), "cid");
 
-        assertThat(result.status()).isEqualTo(Transfer.Status.COMPLETED);
+        assertThat(result.transfer().status()).isEqualTo(Transfer.Status.COMPLETED);
         assertThat(updates).hasSize(2);
         assertThat(updates.get(0)).contains("balance_paise - ?");
         assertThat(updates.get(1)).contains("balance_paise + ?");
@@ -120,9 +120,10 @@ class ConditionalUpdateEngineTest {
         preexisting = new Transfer(UUID.randomUUID(), FROM, TO, 30, "key-1",
                 RequestFingerprint.of(FROM, TO, 30), Transfer.Status.COMPLETED, null, Instant.now());
 
-        Transfer result = engine.execute(req(30), "cid");
+        var result = engine.execute(req(30), "cid");
 
-        assertThat(result).isEqualTo(preexisting);
+        assertThat(result.transfer()).isEqualTo(preexisting);
+        assertThat(result.replayed()).isTrue();
         assertThat(updates).isEmpty(); // no debit, no credit
         assertThat(counter("wallet.transfers.idempotent_replay")).isEqualTo(1.0);
     }

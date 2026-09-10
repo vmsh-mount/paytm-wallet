@@ -25,7 +25,7 @@ public class SerializableEngine implements TransferEngine {
     }
 
     @Override
-    public Transfer execute(TransferRequest request, String correlationId) {
+    public TransferOutcome execute(TransferRequest request, String correlationId) {
         throw new UnsupportedOperationException("scaffold: SerializableEngine not implemented");
     }
 }
