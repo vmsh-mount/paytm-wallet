@@ -22,5 +22,13 @@ public final class DomainExceptions {
         public IdempotencyConflict(String msg) { super(msg); }
     }
 
+    /**
+     * Serializable engine exhausted its retry budget on {@code 40001} conflicts.
+     * -> {@code 503} (retry later), not {@code 500}.
+     */
+    public static class SerializationExhausted extends RuntimeException {
+        public SerializationExhausted(String msg) { super(msg); }
+    }
+
     private DomainExceptions() {}
 }

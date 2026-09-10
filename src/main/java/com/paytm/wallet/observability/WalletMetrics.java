@@ -12,11 +12,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class WalletMetrics {
 
+    private final MeterRegistry registry;
     private final Counter transfersCreated;
     private final Counter transfersDeclinedInsufficientFunds;
     private final Counter idempotentReplays;
 
     public WalletMetrics(MeterRegistry registry) {
+        this.registry = registry;
         this.transfersCreated = Counter.builder("wallet.transfers.created").register(registry);
         this.transfersDeclinedInsufficientFunds =
                 Counter.builder("wallet.transfers.declined").tag("reason", "insufficient_funds").register(registry);
@@ -26,4 +28,9 @@ public class WalletMetrics {
     public void transferCreated() { transfersCreated.increment(); }
     public void declinedInsufficientFunds() { transfersDeclinedInsufficientFunds.increment(); }
     public void idempotentReplay() { idempotentReplays.increment(); }
+
+    /** A serializable-isolation transaction was retried after a {@code 40001} conflict. */
+    public void serializationRetry(String engine) {
+        Counter.builder("wallet.transfer.retries").tag("engine", engine).register(registry).increment();
+    }
 }

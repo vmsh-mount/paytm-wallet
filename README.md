@@ -17,7 +17,7 @@ Build: `./mvnw -B verify` (Maven wrapper pinned to 3.9.9; needs a JDK 21+ and a 
 |---|---|
 | Language / framework | Java 21, Spring Boot 3, `spring-boot-starter-jdbc` (raw SQL, no JPA) |
 | DB | PostgreSQL 16, Flyway migrations |
-| Concurrency mechanism | 3 swappable `TransferEngine`s — decide in code review (see [docs/WRITEUP.md](docs/WRITEUP.md)) |
+| Concurrency mechanism | 3 swappable `TransferEngine`s (`TRANSFER_ENGINE=conditional-update` \| `select-for-update` \| `serializable`); all pass the same invariant suite — benchmark in [`bench/RESULTS.md`](bench/RESULTS.md), rationale in [docs/WRITEUP.md](docs/WRITEUP.md) |
 | Logs | JSON to stdout (logstash-logback), `correlation_id` per request via MDC |
 | Metrics | Micrometer → Prometheus at `/actuator/prometheus`; domain counters in `WalletMetrics` |
 | Deploy | Render blueprint (`render.yaml`) — free web service + free managed Postgres, ₹0 |

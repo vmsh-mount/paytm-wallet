@@ -113,6 +113,13 @@
                 </executions>
             </plugin>
 
+            <!-- ./bench/run.sh — load harness, not part of the build lifecycle -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+            </plugin>
+
             <!-- Run *IT (Testcontainers integration tests) in the verify phase. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
