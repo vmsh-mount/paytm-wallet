@@ -30,14 +30,11 @@ public class ConditionalUpdateEngine extends AbstractJdbcTransferEngine {
         }
 
         long amount = r.amountPaise();
-        int debited = jdbc.update(
-                "UPDATE wallets SET balance_paise = balance_paise - ? WHERE id = ? AND balance_paise >= ?",
-                amount, r.fromWalletId(), amount);
-        if (debited == 0) {
+        Long fromBalanceAfter = debitConditional(r.fromWalletId(), amount);
+        if (fromBalanceAfter == null) {
             return declined(r);
         }
-        jdbc.update("UPDATE wallets SET balance_paise = balance_paise + ? WHERE id = ?",
-                amount, r.toWalletId());
-        return completed(r);
+        long toBalanceAfter = credit(r.toWalletId(), amount);
+        return completed(r, fromBalanceAfter, toBalanceAfter);
     }
 }

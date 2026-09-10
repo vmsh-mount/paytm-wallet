@@ -96,13 +96,13 @@ class LoggingIT extends AbstractPostgresIT {
     }
 
     @Test
-    void retry_storm_emits_one_completed_and_the_rest_replays() throws Exception {
+    void repeated_same_key_emits_one_completed_and_the_rest_replays() throws Exception {
         UUID a = wallet("alice", "dev-token-alice", 1_000_000);
         UUID b = wallet("bob", "dev-token-bob", 0);
-        String key = "storm-" + UUID.randomUUID();
+        String key = "repeat-" + UUID.randomUUID();
         events.list.clear();
 
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 4; i++) { // sequential — concurrent exactly-once is InvariantsIT's job
             mvc.perform(transfer(a, b, 4_000, key));
         }
 

@@ -39,7 +39,7 @@ public abstract class AbstractJdbcTransferEngine implements TransferEngine {
     }
 
     @Override
-    public TransferOutcome execute(TransferRequest request, String correlationId) {
+    public TransferOutcome execute(TransferRequest request) {
         try {
             return attempt(request);
         } catch (DuplicateKeyException raced) {
@@ -62,9 +62,10 @@ public abstract class AbstractJdbcTransferEngine implements TransferEngine {
 
     /**
      * Move {@code amount} from {@code from} to {@code to} with no overdraft and no
-     * lost update, then call {@link #completed(TransferRequest)} /
-     * {@link #declined(TransferRequest)}. Runs inside the transaction opened by
-     * {@link #attempt}.
+     * lost update, then return {@link #completed} / {@link #declined}. Runs inside
+     * the transaction opened by {@link #attempt}. Implementations use
+     * {@code RETURNING balance_paise} on the balance {@code UPDATE}s so no extra
+     * {@code SELECT} is needed for the {@code *_balance_after} audit fields.
      */
     protected abstract TransferOutcome moveMoney(TransferRequest r);
 
@@ -88,10 +89,45 @@ public abstract class AbstractJdbcTransferEngine implements TransferEngine {
         return jdbc.queryForObject("SELECT balance_paise FROM wallets WHERE id = ?", Long.class, walletId);
     }
 
-    protected TransferOutcome completed(TransferRequest r) {
+    /**
+     * {@code UPDATE wallets SET balance_paise = balance_paise - :amt WHERE id = :from
+     * AND balance_paise >= :amt RETURNING balance_paise}. Empty result ⇒ overdraft ⇒
+     * {@code null}. One statement does the check, the debit, and the audit read.
+     */
+    protected Long debitConditional(UUID from, long amount) {
+        return jdbc.query(
+                "UPDATE wallets SET balance_paise = balance_paise - ? "
+                + "WHERE id = ? AND balance_paise >= ? RETURNING balance_paise",
+                rs -> rs.next() ? rs.getLong(1) : null,
+                amount, from, amount);
+    }
+
+    /** Unconditional debit (source already checked / locked), returns the new balance. */
+    protected long debit(UUID from, long amount) {
+        return jdbc.queryForObject(
+                "UPDATE wallets SET balance_paise = balance_paise - ? WHERE id = ? RETURNING balance_paise",
+                Long.class, amount, from);
+    }
+
+    /** Credit, returns the new balance. */
+    protected long credit(UUID to, long amount) {
+        return jdbc.queryForObject(
+                "UPDATE wallets SET balance_paise = balance_paise + ? WHERE id = ? RETURNING balance_paise",
+                Long.class, amount, to);
+    }
+
+    /** Set an exact balance (serializable engine's blind write), returns it back. */
+    protected long setBalance(UUID walletId, long value) {
+        return jdbc.queryForObject(
+                "UPDATE wallets SET balance_paise = ? WHERE id = ? RETURNING balance_paise",
+                Long.class, value, walletId);
+    }
+
+    protected TransferOutcome completed(TransferRequest r, long fromBalanceAfter, long toBalanceAfter) {
         Transfer t = insertTransfer(r, Transfer.Status.COMPLETED, null);
-        DomainEvents.transferDebited(t.id(), r.fromWalletId(), r.amountPaise(), balanceOf(r.fromWalletId()));
-        DomainEvents.transferCredited(t.id(), r.toWalletId(), r.amountPaise(), balanceOf(r.toWalletId()));
+        // emitted after the INSERT commits its row, so a rolled-back attempt logs nothing
+        DomainEvents.transferDebited(t.id(), r.fromWalletId(), r.amountPaise(), fromBalanceAfter);
+        DomainEvents.transferCredited(t.id(), r.toWalletId(), r.amountPaise(), toBalanceAfter);
         metrics.transferCreated();
         return TransferOutcome.fresh(t);
     }

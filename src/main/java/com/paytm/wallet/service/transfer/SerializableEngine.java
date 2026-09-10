@@ -36,11 +36,11 @@ public class SerializableEngine extends AbstractJdbcTransferEngine {
     }
 
     @Override
-    public TransferOutcome execute(TransferRequest request, String correlationId) {
+    public TransferOutcome execute(TransferRequest request) {
         int attempt = 0;
         while (true) {
             try {
-                return super.execute(request, correlationId);
+                return super.execute(request);
             } catch (DataAccessException dae) {
                 if (!isSerializationFailure(dae)) {
                     throw dae;
@@ -81,18 +81,16 @@ public class SerializableEngine extends AbstractJdbcTransferEngine {
 
         // Apply both blind writes lower-id-first: no FOR UPDATE, but still a fixed
         // order so a reverse transfer can't produce an ABBA lock cycle.
+        long fromBalanceAfter;
+        long toBalanceAfter;
         if (r.fromWalletId().compareTo(r.toWalletId()) < 0) {
-            setBalance(r.fromWalletId(), fromBalance - amount);
-            setBalance(r.toWalletId(), toBalance + amount);
+            fromBalanceAfter = setBalance(r.fromWalletId(), fromBalance - amount);
+            toBalanceAfter = setBalance(r.toWalletId(), toBalance + amount);
         } else {
-            setBalance(r.toWalletId(), toBalance + amount);
-            setBalance(r.fromWalletId(), fromBalance - amount);
+            toBalanceAfter = setBalance(r.toWalletId(), toBalance + amount);
+            fromBalanceAfter = setBalance(r.fromWalletId(), fromBalance - amount);
         }
-        return completed(r);
-    }
-
-    private void setBalance(UUID walletId, long value) {
-        jdbc.update("UPDATE wallets SET balance_paise = ? WHERE id = ?", value, walletId);
+        return completed(r, fromBalanceAfter, toBalanceAfter);
     }
 
     private static void backoff(int attempt) {

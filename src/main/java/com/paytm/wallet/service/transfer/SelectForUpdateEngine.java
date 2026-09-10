@@ -33,10 +33,8 @@ public class SelectForUpdateEngine extends AbstractJdbcTransferEngine {
         if (balanceOf(r.fromWalletId()) < amount) { // row is locked → this read is stable
             return declined(r);
         }
-        jdbc.update("UPDATE wallets SET balance_paise = balance_paise - ? WHERE id = ?",
-                amount, r.fromWalletId());
-        jdbc.update("UPDATE wallets SET balance_paise = balance_paise + ? WHERE id = ?",
-                amount, r.toWalletId());
-        return completed(r);
+        long fromBalanceAfter = debit(r.fromWalletId(), amount);
+        long toBalanceAfter = credit(r.toWalletId(), amount);
+        return completed(r, fromBalanceAfter, toBalanceAfter);
     }
 }
