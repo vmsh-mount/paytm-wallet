@@ -17,7 +17,7 @@ echo "== target: $BASE_URL =="
 
 # TODO(scaffold): implement the three probes below.
 #
-# 1. Concurrent get-or-create
+# 1. Concurrent get-or-create   (spec: evals/scenarios/EVAL-C1-concurrent-get-or-create.md)
 #    - pick a brand-new user id
 #    - fire N POST /wallets in parallel
 #    - assert every response has the same wallet id  -> exactly one wallet
