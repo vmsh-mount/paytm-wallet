@@ -6,7 +6,7 @@
 | **Invariant** | #1 Conservation (+ deadlock-freedom) |
 | **Owning task** | TASK-04 |
 | **Runs against** | local compose + deployed URL |
-| **Status** | Draft |
+| **Status** | Ready — `InvariantsIT.conservation_holds_under_concurrent_transfers` + `reverse_transfers_do_not_deadlock`; live probe = `burst.sh` probe 3 (TASK-12) |
 
 ## Goal
 
