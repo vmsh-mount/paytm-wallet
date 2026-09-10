@@ -13,9 +13,8 @@ import java.util.UUID;
 /**
  * Assigns a correlation id per request (honours inbound {@code X-Correlation-Id}),
  * puts it in the SLF4J MDC so every structured log line carries it, and echoes it
- * on the response.
- *
- * TODO(scaffold): flesh out; keep it first in the chain.
+ * on the response. First in the filter chain ({@code Integer.MIN_VALUE}) so
+ * {@link com.paytm.wallet.config.AuthFilter} and everything after it can read it.
  */
 @Component
 @Order(Integer.MIN_VALUE)

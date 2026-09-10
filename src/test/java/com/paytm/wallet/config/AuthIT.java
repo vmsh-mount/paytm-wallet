@@ -1,0 +1,50 @@
+package com.paytm.wallet.config;
+
+import com.paytm.wallet.support.AbstractPostgresIT;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@AutoConfigureMockMvc
+class AuthIT extends AbstractPostgresIT {
+
+    @Autowired
+    MockMvc mvc;
+
+    @Test
+    void post_wallets_without_token_is_401_json() throws Exception {
+        mvc.perform(post("/wallets").contentType("application/json").content("{\"user_id\":\"alice\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("unauthorized"))
+                .andExpect(jsonPath("$.correlation_id").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    @Test
+    void post_wallets_with_unknown_token_is_401() throws Exception {
+        mvc.perform(post("/wallets").header("Authorization", "Bearer not-a-real-token")
+                        .contentType("application/json").content("{\"user_id\":\"alice\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void actuator_health_is_open() throws Exception {
+        mvc.perform(get("/actuator/health")).andExpect(status().isOk());
+    }
+
+    @Test
+    void dot_segment_traversal_out_of_actuator_still_requires_auth() throws Exception {
+        mvc.perform(get("/actuator/../wallets/00000000-0000-0000-0000-000000000000"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // A valid token getting *past* the filter is covered by AuthFilterTest; asserting it
+    // end-to-end here needs a working controller (TASK-03) — the scaffold still throws.
+}
