@@ -6,7 +6,7 @@
 | **Invariant** | #1 #2 #3 hold for every `TransferEngine` |
 | **Owning task** | TASK-07 |
 | **Runs against** | local compose (per engine) |
-| **Status** | Draft |
+| **Status** | Ready — `EngineParityIT` (`@EnumSource(Engine.class)`: conservation, no-overdraft, deadlock-free, idempotent storm, 409) + `SerializableEngineTest`; benchmark in `bench/RESULTS.md`; live probe = `TRANSFER_ENGINE=<v> ./scripts/burst.sh` (TASK-12) |
 
 ## Goal
 

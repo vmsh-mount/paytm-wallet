@@ -38,6 +38,12 @@ public class ApiExceptionHandler {
         return error("idempotency_conflict", ex.getMessage());
     }
 
+    @ExceptionHandler(DomainExceptions.SerializationExhausted.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public Dtos.ErrorResponse serializationExhausted(DomainExceptions.SerializationExhausted ex) {
+        return error("serialization_failure", "too much contention, please retry");
+    }
+
     @ExceptionHandler(DomainExceptions.InvalidTransfer.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Dtos.ErrorResponse invalidTransfer(DomainExceptions.InvalidTransfer ex) {
