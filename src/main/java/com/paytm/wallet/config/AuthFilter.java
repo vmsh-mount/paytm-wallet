@@ -1,7 +1,6 @@
 package com.paytm.wallet.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.paytm.wallet.api.Dtos;
 import com.paytm.wallet.observability.CorrelationIdFilter;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
@@ -22,6 +21,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -87,8 +87,11 @@ public class AuthFilter implements Filter {
     }
 
     private static boolean isOpenPath(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        return path.startsWith("/actuator/") || path.equals("/actuator");
+        // getServletPath() is stripped of the context path and normalised by the
+        // container (dot-segments resolved), so "/actuator/../wallets" is "/wallets"
+        // here and does NOT bypass auth. getRequestURI() would be the raw client string.
+        String path = request.getServletPath();
+        return path.equals("/actuator") || path.startsWith("/actuator/");
     }
 
     /** @return the resolved userId, or {@code null} if the header is missing/malformed/unknown. */
@@ -121,7 +124,12 @@ public class AuthFilter implements Filter {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        objectMapper.writeValue(response.getOutputStream(), new Dtos.ErrorResponse(
-                "unauthorized", "missing or invalid bearer token", correlationId));
+        // Explicit snake_case keys so the 401 body shape (shared with TASK-06's
+        // ErrorResponse) is fixed regardless of the app's Jackson naming strategy.
+        LinkedHashMap<String, String> body = new LinkedHashMap<>();
+        body.put("error", "unauthorized");
+        body.put("message", "missing or invalid bearer token");
+        body.put("correlation_id", correlationId);
+        objectMapper.writeValue(response.getOutputStream(), body);
     }
 }

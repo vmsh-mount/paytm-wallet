@@ -20,16 +20,20 @@ class AuthFilterTest {
     private static final String GOOD_TOKEN = "tok-alice-secret";
 
     private AuthFilter filter;
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private ListAppender<ILoggingEvent> logs;
+
+    /** MockHttpServletRequest doesn't derive servletPath from the URI — set it explicitly. */
+    private static MockHttpServletRequest req(String method, String servletPath) {
+        MockHttpServletRequest r = new MockHttpServletRequest(method, servletPath);
+        r.setServletPath(servletPath);
+        return r;
+    }
 
     @BeforeEach
     void setUp() {
         AuthProperties props = new AuthProperties();
         props.setTokens(GOOD_TOKEN + ":alice,tok-bob:bob");
-        // mirror the app's Jackson config (application.yml: SNAKE_CASE)
-        objectMapper = new ObjectMapper()
-                .setPropertyNamingStrategy(com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE);
         filter = new AuthFilter(props, objectMapper);
 
         logs = new ListAppender<>();
@@ -39,10 +43,7 @@ class AuthFilterTest {
 
     @AfterEach
     void tearDown() {
-        ch.qos.logback.classic.Logger logger =
-                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(AuthFilter.class);
-        logger.detachAppender(logs);
-        logger.setLevel(null);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(AuthFilter.class)).detachAppender(logs);
         assertThat(org.slf4j.MDC.get(AuthFilter.MDC_USER_ID)).isNull();
         assertThat(RequestContext.current()).isEmpty();
     }
@@ -53,20 +54,22 @@ class AuthFilterTest {
         return response;
     }
 
-    @Test
-    void valid_token_proceeds_and_binds_request_context() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/wallets");
-        request.addHeader("Authorization", "Bearer " + GOOD_TOKEN);
-
-        AtomicReference<String> seenUser = new AtomicReference<>();
-        MockFilterChain chain = new MockFilterChain() {
+    private static MockFilterChain capturingChain(AtomicReference<String> seenUser) {
+        return new MockFilterChain() {
             @Override
             public void doFilter(jakarta.servlet.ServletRequest req, jakarta.servlet.ServletResponse res) {
                 seenUser.set(RequestContext.userId());
             }
         };
+    }
 
-        MockHttpServletResponse response = run(request, chain);
+    @Test
+    void valid_token_proceeds_and_binds_request_context() throws Exception {
+        MockHttpServletRequest request = req("POST", "/wallets");
+        request.addHeader("Authorization", "Bearer " + GOOD_TOKEN);
+        AtomicReference<String> seenUser = new AtomicReference<>();
+
+        MockHttpServletResponse response = run(request, capturingChain(seenUser));
 
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(seenUser.get()).isEqualTo("alice");
@@ -74,40 +77,33 @@ class AuthFilterTest {
 
     @Test
     void tokens_map_to_their_own_users() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/wallets");
+        MockHttpServletRequest request = req("POST", "/wallets");
         request.addHeader("Authorization", "Bearer tok-bob");
         AtomicReference<String> seenUser = new AtomicReference<>();
-        MockFilterChain chain = new MockFilterChain() {
-            @Override
-            public void doFilter(jakarta.servlet.ServletRequest req, jakarta.servlet.ServletResponse res) {
-                seenUser.set(RequestContext.userId());
-            }
-        };
 
-        run(request, chain);
+        run(request, capturingChain(seenUser));
 
         assertThat(seenUser.get()).isEqualTo("bob");
     }
 
     @Test
     void missing_header_is_401_json_with_correlation_id() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/wallets");
         MockFilterChain chain = new MockFilterChain();
 
-        MockHttpServletResponse response = run(request, chain);
+        MockHttpServletResponse response = run(req("POST", "/wallets"), chain);
 
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(response.getContentType()).startsWith("application/json");
         var body = objectMapper.readTree(response.getContentAsString());
         assertThat(body.get("error").asText()).isEqualTo("unauthorized");
-        assertThat(body.has("correlation_id")).isTrue();
+        assertThat(body.get("correlation_id").asText()).isNotBlank();
         assertThat(chain.getRequest()).isNull(); // chain not invoked
     }
 
     @Test
     void malformed_and_unknown_tokens_are_401() throws Exception {
         for (String header : new String[]{"Basic abc", "Bearer", "Bearer ", "Bearer nope", "bearer " + GOOD_TOKEN}) {
-            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/wallets/x");
+            MockHttpServletRequest request = req("GET", "/wallets/x");
             request.addHeader("Authorization", header);
             MockHttpServletResponse response = run(request, new MockFilterChain());
             assertThat(response.getStatus()).as("header=%s", header).isEqualTo(401);
@@ -116,22 +112,29 @@ class AuthFilterTest {
 
     @Test
     void actuator_paths_bypass_auth() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/actuator/health");
         MockFilterChain chain = new MockFilterChain();
 
-        MockHttpServletResponse response = run(request, chain);
+        MockHttpServletResponse response = run(req("GET", "/actuator/health"), chain);
 
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(chain.getRequest()).isNotNull(); // proceeded
     }
 
     @Test
+    void non_actuator_path_is_not_bypassed() throws Exception {
+        // servletPath is already container-normalised; a traversal that resolves out
+        // of /actuator must not be treated as open.
+        MockHttpServletResponse response = run(req("GET", "/wallets"), new MockFilterChain());
+        assertThat(response.getStatus()).isEqualTo(401);
+    }
+
+    @Test
     void token_value_is_never_logged() throws Exception {
-        MockHttpServletRequest ok = new MockHttpServletRequest("POST", "/wallets");
+        MockHttpServletRequest ok = req("POST", "/wallets");
         ok.addHeader("Authorization", "Bearer " + GOOD_TOKEN);
         run(ok, new MockFilterChain());
 
-        MockHttpServletRequest bad = new MockHttpServletRequest("POST", "/wallets");
+        MockHttpServletRequest bad = req("POST", "/wallets");
         bad.addHeader("Authorization", "Bearer " + GOOD_TOKEN + "-tampered");
         run(bad, new MockFilterChain());
 

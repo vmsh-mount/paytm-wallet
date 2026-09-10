@@ -7,6 +7,10 @@ import java.util.Optional;
  * request completes. {@code ThreadLocal} rather than a request-scoped bean: the
  * request is handled on one thread and this avoids a proxy on every injection
  * point.
+ *
+ * <p>Bound to the request thread only — it does not follow an async dispatch or
+ * {@code @Async} hand-off. All current endpoints are synchronous; revisit if that
+ * changes.
  */
 public final class RequestContext {
 

@@ -39,6 +39,12 @@ class AuthIT extends AbstractPostgresIT {
         mvc.perform(get("/actuator/health")).andExpect(status().isOk());
     }
 
+    @Test
+    void dot_segment_traversal_out_of_actuator_still_requires_auth() throws Exception {
+        mvc.perform(get("/actuator/../wallets/00000000-0000-0000-0000-000000000000"))
+                .andExpect(status().isUnauthorized());
+    }
+
     // A valid token getting *past* the filter is covered by AuthFilterTest; asserting it
     // end-to-end here needs a working controller (TASK-03) — the scaffold still throws.
 }

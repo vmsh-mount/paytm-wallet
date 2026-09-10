@@ -11,7 +11,7 @@
 
     <appender name="PLAIN" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} %-5level [%X{correlation_id}] %logger{36} - %msg%n</pattern>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%X{correlation_id}] [%X{user_id}] %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
