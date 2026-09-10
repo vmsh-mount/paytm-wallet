@@ -17,6 +17,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -86,11 +88,13 @@ public class AuthFilter implements Filter {
         }
     }
 
+    private static final UrlPathHelper PATH_HELPER = UrlPathHelper.defaultInstance;
+
     private static boolean isOpenPath(HttpServletRequest request) {
-        // getServletPath() is stripped of the context path and normalised by the
-        // container (dot-segments resolved), so "/actuator/../wallets" is "/wallets"
-        // here and does NOT bypass auth. getRequestURI() would be the raw client string.
-        String path = request.getServletPath();
+        // Context path stripped + URL-decoded + ";" params removed (UrlPathHelper),
+        // then dot-segments collapsed (StringUtils.cleanPath). Deterministic across
+        // Tomcat and MockMvc, and a "/actuator/.." traversal resolves out → NOT open.
+        String path = StringUtils.cleanPath(PATH_HELPER.getPathWithinApplication(request));
         return path.equals("/actuator") || path.startsWith("/actuator/");
     }
 
