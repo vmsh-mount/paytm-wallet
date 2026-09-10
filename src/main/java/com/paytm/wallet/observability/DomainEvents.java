@@ -58,11 +58,11 @@ public final class DomainEvents {
                 .log("wallet credited");
     }
 
-    public static void transferCompleted(UUID transferId, long amountPaise, long latencyMs) {
+    public static void transferCompleted(UUID transferId, long amountPaise, double latencyMs) {
         event(DomainEvent.TRANSFER_COMPLETED)
                 .addKeyValue("transfer_id", transferId)
                 .addKeyValue("amount_paise", amountPaise)
-                .addKeyValue("latency_ms", latencyMs)
+                .addKeyValue("latency_ms", Math.round(latencyMs * 1000) / 1000.0) // sub-ms precision
                 .log("transfer completed");
     }
 

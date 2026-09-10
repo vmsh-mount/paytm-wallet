@@ -108,7 +108,7 @@ public final class EngineBenchmark {
                             UUID.randomUUID().toString());
                     long t0 = System.nanoTime();
                     try {
-                        var out = e.execute(req, "bench");
+                        var out = e.execute(req);
                         latencies.add(System.nanoTime() - t0);
                         switch (out.transfer().status()) {
                             case COMPLETED -> completed.increment();

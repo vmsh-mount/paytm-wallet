@@ -40,7 +40,7 @@ class TransferControllerTest {
     private UUID aliceWallet;
     private UUID bobWallet;
 
-    private final TransferEngine engine = (request, cid) -> {
+    private final TransferEngine engine = request -> {
         if (engineThrows.get() != null) {
             throw engineThrows.get();
         }

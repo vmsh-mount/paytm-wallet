@@ -7,8 +7,6 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.CannotSerializeTransactionException;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import java.sql.SQLException;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -16,6 +14,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -27,10 +26,10 @@ class SerializableEngineTest {
 
     private int failuresRemaining = 0;
 
+    @SuppressWarnings("unchecked")
     private final JdbcTemplate fakeJdbc = new JdbcTemplate() {
         @Override
-        public void query(String sql, RowCallbackHandler rch, Object... args) {
-        }
+        public void query(String sql, RowCallbackHandler rch, Object... args) { }
 
         @Override
         public <T> List<T> query(String sql, RowMapper<T> rm, Object... args) {
@@ -39,20 +38,14 @@ class SerializableEngineTest {
 
         @Override
         public <T> T queryForObject(String sql, Class<T> type, Object... args) {
-            return type.cast(1_000L); // balanceOf
-        }
-
-        @Override
-        public int update(String sql, Object... args) {
-            if (failuresRemaining-- > 0) {
+            if (sql.startsWith("UPDATE") && failuresRemaining-- > 0) {
                 throw new CannotSerializeTransactionException("conflict",
                         new SQLException("could not serialize access", "40001"));
             }
-            return 1;
+            return type.cast(1_000L); // balanceOf / setBalance RETURNING
         }
 
         @Override
-        @SuppressWarnings("unchecked")
         public <T> T queryForObject(String sql, RowMapper<T> rm, Object... args) {
             return (T) new Transfer(UUID.randomUUID(), (UUID) args[0], (UUID) args[1],
                     (long) args[2], (String) args[3], (String) args[4],
@@ -80,7 +73,7 @@ class SerializableEngineTest {
     void retries_40001_and_eventually_succeeds() {
         failuresRemaining = 2;
 
-        var outcome = engine(5).execute(req(), "cid");
+        var outcome = engine(5).execute(req());
 
         assertThat(outcome.transfer().status()).isEqualTo(Transfer.Status.COMPLETED);
         assertThat(registry.get("wallet.transfer.retries").tag("engine", "serializable").counter().count())
@@ -91,7 +84,7 @@ class SerializableEngineTest {
     void exhausted_retries_raise_503_not_500() {
         failuresRemaining = 100;
 
-        assertThatThrownBy(() -> engine(3).execute(req(), "cid"))
+        assertThatThrownBy(() -> engine(3).execute(req()))
                 .isInstanceOf(DomainExceptions.SerializationExhausted.class);
         assertThat(registry.get("wallet.transfer.retries").counter().count()).isEqualTo(3.0);
     }

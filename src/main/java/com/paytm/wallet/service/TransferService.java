@@ -2,12 +2,14 @@ package com.paytm.wallet.service;
 
 import com.paytm.wallet.domain.Transfer;
 import com.paytm.wallet.domain.Wallet;
+import com.paytm.wallet.observability.CorrelationIdFilter;
 import com.paytm.wallet.observability.DomainEvents;
 import com.paytm.wallet.repo.TransferRepository;
 import com.paytm.wallet.repo.WalletRepository;
 import com.paytm.wallet.service.transfer.TransferEngine;
 import com.paytm.wallet.service.transfer.TransferOutcome;
 import com.paytm.wallet.service.transfer.TransferRequest;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -38,6 +40,22 @@ public class TransferService {
     }
 
     public TransferOutcome create(TransferRequest request, String callerUserId, String correlationId) {
+        // Ensure a correlation id is in the MDC even for direct (non-HTTP) callers,
+        // so every DomainEvents line for this transfer is correlated.
+        boolean ownsMdc = MDC.get(CorrelationIdFilter.MDC_KEY) == null && correlationId != null;
+        if (ownsMdc) {
+            MDC.put(CorrelationIdFilter.MDC_KEY, correlationId);
+        }
+        try {
+            return doCreate(request, callerUserId);
+        } finally {
+            if (ownsMdc) {
+                MDC.remove(CorrelationIdFilter.MDC_KEY);
+            }
+        }
+    }
+
+    private TransferOutcome doCreate(TransferRequest request, String callerUserId) {
         if (request.amountPaise() <= 0) {
             throw new DomainExceptions.InvalidTransfer("amount_paise must be positive");
         }
@@ -57,10 +75,10 @@ public class TransferService {
                 request.amountPaise(), request.idempotencyKey());
 
         long startNanos = System.nanoTime();
-        TransferOutcome outcome = engine.execute(request, correlationId);
+        TransferOutcome outcome = engine.execute(request);
         if (!outcome.replayed() && outcome.transfer().status() == Transfer.Status.COMPLETED) {
             DomainEvents.transferCompleted(outcome.transfer().id(), request.amountPaise(),
-                    (System.nanoTime() - startNanos) / 1_000_000);
+                    (System.nanoTime() - startNanos) / 1_000_000.0);
         }
         return outcome;
     }
