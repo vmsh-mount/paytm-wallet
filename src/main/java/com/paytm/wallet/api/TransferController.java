@@ -5,8 +5,6 @@ import com.paytm.wallet.service.TransferService;
 import com.paytm.wallet.service.transfer.TransferOutcome;
 import com.paytm.wallet.service.transfer.TransferRequest;
 import jakarta.validation.Valid;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,8 +37,6 @@ import java.util.UUID;
 @RequestMapping("/transfers")
 public class TransferController {
 
-    private static final Logger log = LoggerFactory.getLogger(TransferController.class);
-
     private final TransferService transfers;
 
     public TransferController(TransferService transfers) {
@@ -49,12 +45,6 @@ public class TransferController {
 
     @PostMapping
     public ResponseEntity<Dtos.TransferResponse> create(@Valid @RequestBody Dtos.CreateTransferRequest body) {
-        log.atInfo().addKeyValue("event", "transfer.request.received")
-                .addKeyValue("from_wallet_id", body.from())
-                .addKeyValue("to_wallet_id", body.to())
-                .addKeyValue("amount_paise", body.amountPaise())
-                .log("transfer request received");
-
         RequestContext ctx = RequestContext.current().orElseThrow();
         TransferOutcome outcome = transfers.create(
                 new TransferRequest(body.from(), body.to(), body.amountPaise(), body.idempotencyKey()),

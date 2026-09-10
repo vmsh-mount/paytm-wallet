@@ -51,6 +51,11 @@ class ConditionalUpdateEngineTest {
         }
 
         @Override
+        public <T> T queryForObject(String sql, Class<T> type, Object... args) {
+            return type.cast(0L); // balanceOf(...) for the debited/credited events
+        }
+
+        @Override
         @SuppressWarnings("unchecked")
         public <T> T queryForObject(String sql, RowMapper<T> rowMapper, Object... args) {
             return (T) new Transfer(UUID.randomUUID(), (UUID) args[0], (UUID) args[1],

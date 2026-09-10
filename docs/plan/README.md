@@ -21,7 +21,7 @@ its acceptance criteria and test plan are green and the change is committed.
 | [05](TASK-05-idempotency.md) | Idempotency layer | #3 | 04 | Done |
 | [06](TASK-06-transfer-api.md) | Transfer API, status & error contract | #1 #2 #3 | 04 05 | Done |
 | [07](TASK-07-alternative-engines.md) | Alternative engines + benchmark | #1 #2 | 04 06 | Done |
-| [08](TASK-08-structured-logging.md) | Structured logging & correlation id | — | 06 | Not started |
+| [08](TASK-08-structured-logging.md) | Structured logging & correlation id | — | 06 | Done |
 | [09](TASK-09-metrics-dashboard.md) | Metrics & dashboard | — | 06 08 | Not started |
 | [10](TASK-10-containerization.md) | Containerization & one-command compose | — | 06 | Not started |
 | [11](TASK-11-deploy-render.md) | Deploy to Render + managed Postgres | — | 08 09 10 | Not started |

@@ -2,13 +2,12 @@ package com.paytm.wallet.service;
 
 import com.paytm.wallet.domain.Transfer;
 import com.paytm.wallet.domain.Wallet;
+import com.paytm.wallet.observability.DomainEvents;
 import com.paytm.wallet.repo.TransferRepository;
 import com.paytm.wallet.repo.WalletRepository;
 import com.paytm.wallet.service.transfer.TransferEngine;
 import com.paytm.wallet.service.transfer.TransferOutcome;
 import com.paytm.wallet.service.transfer.TransferRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -26,8 +25,6 @@ import java.util.UUID;
  */
 @Service
 public class TransferService {
-
-    private static final Logger log = LoggerFactory.getLogger(TransferService.class);
 
     private final TransferEngine engine;
     private final TransferRepository transfers;
@@ -56,14 +53,16 @@ public class TransferService {
                     "caller does not own source wallet " + from.id());
         }
 
-        log.atInfo().addKeyValue("event", "transfer.created")
-                .addKeyValue("from_wallet_id", request.fromWalletId())
-                .addKeyValue("to_wallet_id", request.toWalletId())
-                .addKeyValue("amount_paise", request.amountPaise())
-                .addKeyValue("idempotency_key", request.idempotencyKey())
-                .log("transfer requested");
+        DomainEvents.transferReceived(request.fromWalletId(), request.toWalletId(),
+                request.amountPaise(), request.idempotencyKey());
 
-        return engine.execute(request, correlationId);
+        long startNanos = System.nanoTime();
+        TransferOutcome outcome = engine.execute(request, correlationId);
+        if (!outcome.replayed() && outcome.transfer().status() == Transfer.Status.COMPLETED) {
+            DomainEvents.transferCompleted(outcome.transfer().id(), request.amountPaise(),
+                    (System.nanoTime() - startNanos) / 1_000_000);
+        }
+        return outcome;
     }
 
     public Transfer get(UUID transferId) {

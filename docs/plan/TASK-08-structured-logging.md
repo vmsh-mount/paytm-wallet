@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Not started |
+| **Status** | Done |
 | **Branch** | `task/08-structured-logging` |
 | **Depends on** | TASK-06 |
 | **Invariant(s)** | — |

@@ -1,9 +1,8 @@
 package com.paytm.wallet.service.transfer;
 
+import com.paytm.wallet.observability.DomainEvents;
 import com.paytm.wallet.observability.WalletMetrics;
 import com.paytm.wallet.service.DomainExceptions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -26,7 +25,6 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public class SerializableEngine extends AbstractJdbcTransferEngine {
 
-    private static final Logger log = LoggerFactory.getLogger(SerializableEngine.class);
     private static final String ENGINE = "serializable";
 
     private final int maxRetries;
@@ -48,17 +46,12 @@ public class SerializableEngine extends AbstractJdbcTransferEngine {
                     throw dae;
                 }
                 if (++attempt > maxRetries) {
-                    log.atWarn().addKeyValue("event", "transfer.serialization_failure_exhausted")
-                            .addKeyValue("idempotency_key", request.idempotencyKey())
-                            .addKeyValue("attempts", attempt)
-                            .log("serialization conflict unresolved after retry budget");
+                    DomainEvents.serializationExhausted(request.idempotencyKey(), attempt);
                     throw new DomainExceptions.SerializationExhausted(
                             "serialization conflict not resolved after " + maxRetries + " retries");
                 }
                 metrics.serializationRetry(ENGINE);
-                log.atDebug().addKeyValue("event", "transfer.serialization_retry")
-                        .addKeyValue("idempotency_key", request.idempotencyKey())
-                        .addKeyValue("attempt", attempt).log("retrying after 40001");
+                DomainEvents.serializationRetry(request.idempotencyKey(), attempt);
                 backoff(attempt);
             }
         }
