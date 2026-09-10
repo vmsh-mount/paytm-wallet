@@ -43,10 +43,14 @@ class MetricsIT extends AbstractPostgresIT {
                         + ",\"idempotency_key\":\"" + key + "\"}"));
     }
 
-    private static double sampleValue(String scrape, String metric) {
+    // the Spring context (and its MeterRegistry) is cached and shared with other ITs,
+    // so assert on deltas, never absolute counter values
+    private double scrapeValue(String metric) throws Exception {
+        String scrape = mvc.perform(get("/metrics")).andReturn().getResponse().getContentAsString();
         Matcher m = Pattern.compile("(?m)^" + Pattern.quote(metric) + "(?:\\{[^}]*})?\\s+([-\\d.eE+]+)$")
                 .matcher(scrape);
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        double v = m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        return Double.isNaN(v) ? 0 : v;
     }
 
     @Test
@@ -54,7 +58,9 @@ class MetricsIT extends AbstractPostgresIT {
         UUID a = wallet("alice", "dev-token-alice", 1_000_000);
         UUID b = wallet("bob", "dev-token-bob", 0);
 
-        double createdBefore = created();
+        double completed0 = scrapeValue("wallet_transfers_completed_total");
+        double declined0 = scrapeValue("wallet_transfers_declined_total");
+        double replay0 = scrapeValue("wallet_transfers_idempotent_replay_total");
 
         for (int i = 0; i < 10; i++) {                         // 10 completed
             transfer(a, b, 100, "m-c" + i + "-" + UUID.randomUUID());
@@ -72,9 +78,9 @@ class MetricsIT extends AbstractPostgresIT {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        assertThat(created() - createdBefore).isEqualTo(11.0);
-        assertThat(sampleValue(scrape, "wallet_transfers_declined_total")).isEqualTo(3.0);
-        assertThat(sampleValue(scrape, "wallet_transfers_idempotent_replay_total")).isEqualTo(5.0);
+        assertThat(scrapeValue("wallet_transfers_completed_total") - completed0).isEqualTo(11.0);
+        assertThat(scrapeValue("wallet_transfers_declined_total") - declined0).isEqualTo(3.0);
+        assertThat(scrapeValue("wallet_transfers_idempotent_replay_total") - replay0).isEqualTo(5.0);
         assertThat(scrape).contains("http_server_requests_seconds");
         assertThat(scrape).contains("wallet_transfer_duration_seconds");
     }
@@ -84,11 +90,5 @@ class MetricsIT extends AbstractPostgresIT {
         mvc.perform(get("/metrics")).andExpect(status().isOk());
         mvc.perform(get("/dashboard")).andExpect(status().isOk());
         mvc.perform(get("/dashboard.html")).andExpect(status().isOk());
-    }
-
-    private double created() throws Exception {
-        String scrape = mvc.perform(get("/metrics")).andReturn().getResponse().getContentAsString();
-        double v = sampleValue(scrape, "wallet_transfers_completed_total");
-        return Double.isNaN(v) ? 0 : v;
     }
 }
