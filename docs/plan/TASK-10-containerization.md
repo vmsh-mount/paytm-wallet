@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Not started |
+| **Status** | Done |
 | **Branch** | `task/10-containerization` |
 | **Depends on** | TASK-06 |
 | **Invariant(s)** | — |

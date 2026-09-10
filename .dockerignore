@@ -1,8 +1,11 @@
-target/
-.git/
-.idea/
-*.iml
-docs/
-scripts/
-.github/
-*.md
+# Keep the build context tiny — only what the Dockerfile build stage needs.
+*
+!pom.xml
+!mvnw
+!.mvn/
+!src/
+
+# ...and never leak these even if the globs above change
+**/.git
+**/target
+.env
