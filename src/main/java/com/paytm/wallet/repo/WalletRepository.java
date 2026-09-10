@@ -20,9 +20,17 @@ public class WalletRepository {
         this.jdbc = jdbc;
     }
 
-    /** INSERT ... ON CONFLICT (user_id) DO NOTHING. Returns true if a row was created. */
+    /**
+     * {@code INSERT ... ON CONFLICT (user_id) DO NOTHING}. The {@code UNIQUE(user_id)}
+     * index is the sole arbiter — the DB never creates a second row, and a concurrent
+     * loser simply gets 0 rows affected.
+     *
+     * @return true iff this call created the row (false = it already existed)
+     */
     public boolean insertIfAbsent(String userId) {
-        throw new UnsupportedOperationException("scaffold: write path lands in TASK-03");
+        return jdbc.update(
+                "INSERT INTO wallets (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING",
+                userId) == 1;
     }
 
     public Optional<Wallet> findByUserId(String userId) {

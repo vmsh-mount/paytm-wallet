@@ -6,7 +6,7 @@
 | **Invariant** | #4 Race-free get-or-create |
 | **Owning task** | TASK-03 |
 | **Runs against** | local compose + deployed URL |
-| **Status** | Draft |
+| **Status** | Ready — covered by `InvariantsIT.concurrent_get_or_create_yields_one_wallet` (N=50); live probe is `scripts/burst.sh` probe 1 (implemented in TASK-12) |
 
 ## Goal
 

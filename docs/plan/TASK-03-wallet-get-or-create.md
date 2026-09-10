@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Not started |
+| **Status** | Done |
 | **Branch** | `task/03-wallet-get-or-create` |
 | **Depends on** | TASK-01, TASK-02 |
 | **Invariant(s)** | **#4 Race-free get-or-create** |
