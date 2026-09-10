@@ -16,6 +16,14 @@ import java.util.UUID;
  */
 public final class RowMappers {
 
+    /** Column list matching {@link #WALLET}, for {@code SELECT} / {@code RETURNING}. */
+    public static final String WALLET_COLUMNS = "id, user_id, balance_paise, created_at";
+
+    /** Column list matching {@link #TRANSFER}, for {@code SELECT} / {@code RETURNING}. */
+    public static final String TRANSFER_COLUMNS =
+            "id, from_wallet_id, to_wallet_id, amount_paise, idempotency_key, "
+            + "request_fingerprint, status, decline_reason, created_at";
+
     public static final RowMapper<Wallet> WALLET = (rs, rowNum) -> new Wallet(
             rs.getObject("id", UUID.class),
             rs.getString("user_id"),

@@ -6,7 +6,7 @@
 | **Invariant** | #2 No overdraft |
 | **Owning task** | TASK-04 |
 | **Runs against** | local compose + deployed URL |
-| **Status** | Draft |
+| **Status** | Ready — `InvariantsIT.no_overdraft_under_contention`; live probe = `burst.sh` probe 3 overdraw variant (TASK-12) |
 
 ## Goal
 

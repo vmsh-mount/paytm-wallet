@@ -16,9 +16,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * {@code {error, message, correlation_id}}. The correlation id comes from the MDC
  * set by {@link CorrelationIdFilter}.
  *
- * <p>TASK-03 covers 400 (bad input) and 404 (unknown wallet/transfer); 403
- * (not owner) and 409 (idempotency conflict) are wired in TASK-06 when the
- * exceptions that raise them start being thrown.
+ * <p>409 (idempotency conflict) is wired in TASK-06 when that exception starts
+ * being thrown.
  */
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -27,6 +26,18 @@ public class ApiExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public Dtos.ErrorResponse notFound(DomainExceptions.NotFound ex) {
         return error("not_found", ex.getMessage());
+    }
+
+    @ExceptionHandler(DomainExceptions.InvalidTransfer.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Dtos.ErrorResponse invalidTransfer(DomainExceptions.InvalidTransfer ex) {
+        return error("bad_request", ex.getMessage());
+    }
+
+    @ExceptionHandler(DomainExceptions.NotWalletOwner.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public Dtos.ErrorResponse notOwner(DomainExceptions.NotWalletOwner ex) {
+        return error("forbidden", ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

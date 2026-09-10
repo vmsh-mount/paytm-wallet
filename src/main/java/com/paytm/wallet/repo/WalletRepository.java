@@ -12,7 +12,7 @@ import java.util.UUID;
 @Repository
 public class WalletRepository {
 
-    private static final String COLUMNS = "id, user_id, balance_paise, created_at";
+    private static final String COLUMNS = RowMappers.WALLET_COLUMNS;
 
     private final JdbcTemplate jdbc;
 

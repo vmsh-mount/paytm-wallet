@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Not started |
+| **Status** | Done |
 | **Branch** | `task/04-transfer-engine-conditional` |
 | **Depends on** | TASK-01, TASK-03 |
 | **Invariant(s)** | **#1 Conservation**, **#2 No overdraft** |

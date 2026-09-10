@@ -17,11 +17,19 @@
 
 ## Simplest-correct mechanism (conservation + no-overdraft)
 
-- **Chosen:** row-locked conditional debit — `UPDATE wallets SET balance_paise = balance_paise - :amt WHERE id = :from AND balance_paise >= :amt`. `rowsAffected == 0` ⇒ declined, no partial apply. Credit is a second `UPDATE`. Both wallet rows touched in **ascending id order** ⇒ no deadlock when A→B and B→A race.
-- **Rejected — `SELECT … FOR UPDATE` + app check:** correct, but two round trips and a wider check-then-act window than the single conditional statement.
-- **Rejected — `SERIALIZABLE`:** correct, but forces a `40001` retry loop and moves the reasoning surface to the whole transaction's read/write set. Heavier to defend.
-- All three are implemented behind `TransferEngine` (`wallet.transfer.engine`) for benchmarking; default `conditional-update`.
-- _Benchmark numbers:_ TODO.
+- **Chosen — `ConditionalUpdateEngine`.** One `READ COMMITTED` transaction:
+  1. `SELECT id FROM wallets WHERE id IN (:from,:to) ORDER BY id FOR UPDATE` — take **both** row locks up front, sorted by id.
+  2. `UPDATE wallets SET balance_paise = balance_paise - :amt WHERE id = :from AND balance_paise >= :amt` — the check and the debit are one atomic statement. `rowsAffected == 0` ⇒ `DECLINED(insufficient_funds)`, no partial apply.
+  3. `UPDATE wallets SET balance_paise = balance_paise + :amt WHERE id = :to`.
+  4. `INSERT` the `transfers` row (COMPLETED or DECLINED) — same transaction, so it commits iff the money moved.
+- **Deadlock-freedom:** the pre-lock is sorted by wallet id, so `A→B` and `B→A` running together both try to lock `min(A,B)` first — one waits, no ABBA cycle. Without the sorted pre-lock, `UPDATE from` then `UPDATE to` could deadlock (`40P01`) and force a retry loop; sorting removes the possibility rather than recovering from it.
+- **Why `READ COMMITTED` is enough:** we touch exactly two rows by primary key, both write-locked; there is no phantom or read-skew surface. The `CHECK (balance_paise >= 0)` is defence-in-depth and should never fire given the predicate.
+- **Conservation proof sketch:** `-amt` and `+amt` of the same integer, committed together; `wallets.balance_paise` has no other writer; no partial commit. Σ is invariant.
+- **Rejected — `SELECT … FOR UPDATE` + app-side check:** correct, but an extra round trip and a wider check-then-act window than the single conditional `UPDATE`.
+- **Rejected — `SERIALIZABLE`:** correct, but forces a `40001` retry loop and moves the reasoning surface to the whole transaction's read/write set — heavier to defend.
+- All three live behind `TransferEngine` (`wallet.transfer.engine`, default `conditional-update`); the other two are implemented in TASK-07 to make this comparison concrete and to benchmark.
+- Verified by `InvariantsIT`: 200 concurrent mixed transfers (incl. A↔B simultaneously) → `SUM(balance_paise)` exactly unchanged, `MIN` ≥ 0, zero deadlock errors; a 100-way race on a wallet funded for 5 → exactly 5 COMPLETED, 95 DECLINED, balance floors at 0.
+- _Benchmark numbers (all three engines):_ TASK-07.
 
 ## Where idempotency lives
 

@@ -7,6 +7,11 @@ public final class DomainExceptions {
         public NotFound(String msg) { super(msg); }
     }
 
+    /** Request is structurally invalid (non-positive amount, from == to). -> 400 */
+    public static class InvalidTransfer extends RuntimeException {
+        public InvalidTransfer(String msg) { super(msg); }
+    }
+
     /** Caller's bearer token does not own the source wallet. -> 403 */
     public static class NotWalletOwner extends RuntimeException {
         public NotWalletOwner(String msg) { super(msg); }

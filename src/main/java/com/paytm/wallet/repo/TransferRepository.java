@@ -12,9 +12,7 @@ import java.util.UUID;
 @Repository
 public class TransferRepository {
 
-    private static final String COLUMNS =
-            "id, from_wallet_id, to_wallet_id, amount_paise, idempotency_key, "
-            + "request_fingerprint, status, decline_reason, created_at";
+    private static final String COLUMNS = RowMappers.TRANSFER_COLUMNS;
 
     private final JdbcTemplate jdbc;
 

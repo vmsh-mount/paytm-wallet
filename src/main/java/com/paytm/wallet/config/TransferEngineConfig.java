@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Selects the active {@link TransferEngine} via {@code wallet.transfer.engine}
@@ -19,8 +20,8 @@ public class TransferEngineConfig {
 
     @Bean
     @ConditionalOnProperty(name = "wallet.transfer.engine", havingValue = "conditional-update", matchIfMissing = true)
-    TransferEngine conditionalUpdateEngine(JdbcTemplate jdbc) {
-        return new ConditionalUpdateEngine(jdbc);
+    TransferEngine conditionalUpdateEngine(JdbcTemplate jdbc, PlatformTransactionManager txManager) {
+        return new ConditionalUpdateEngine(jdbc, txManager);
     }
 
     @Bean
