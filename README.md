@@ -74,12 +74,40 @@ src/main/java/com/paytm/wallet/
   service/        WalletService, TransferService, domain exceptions
   service/transfer/  TransferEngine + 3 implementations
   repo/           JDBC repositories
-  observability/  correlation-id filter, domain metrics
+  observability/  correlation-id + access-log filters, DomainEvents, metrics
   config/         auth filter, engine selection
 src/main/resources/
   db/migration/   Flyway SQL
   application.yml, logback-spring.xml
 ```
+
+## Observability → Logs
+
+Structured JSON to stdout (one object per line). Every line carries `ts`, `level`, `logger`,
+`message`, `service`, and — when the request set them — `correlation_id` and `user_id`.
+
+- **Correlation id:** `X-Correlation-Id` is honoured inbound, generated if absent, echoed on the response, and threaded through every log line for that request.
+- **Access log:** one `event=http.access` line per request — `method`, `path`, `status`, `duration_ms`, `user_id`.
+- **Domain events** (`event=…`, closed set — see `observability/DomainEvent`):
+  `wallet.created`, `transfer.received`, `transfer.debited` (+`from_balance_after`), `transfer.credited` (+`to_balance_after`), `transfer.completed` (+`latency_ms`), `transfer.declined` (+`reason`), `transfer.idempotent_replay`, `transfer.conflict`, `transfer.serialization_retry` / `…exhausted`.
+- **Never logged:** bearer tokens; full `idempotency_key` (only `idempotency_key_hash`, a 12-hex SHA-256 prefix); PII.
+
+Example queries (jq over the stream, or Loki/LogQL once drained):
+
+```bash
+# every event for one request
+jq -c 'select(.correlation_id=="<id>")'
+# running balance audit during a burst
+jq -c 'select(.event=="transfer.debited" or .event=="transfer.credited")
+       | {ts, event, transfer_id, from_balance_after, to_balance_after}'
+# were there any errors?
+jq -c 'select(.level=="ERROR")'
+```
+
+**Public link:** Render exposes a per-service log stream at the dashboard URL — added here once
+deployed (TASK-11), alongside a screen recording of the stream during `./scripts/burst.sh` in
+[`docs/media/`](docs/media/). Upgrade path: a log drain to Grafana Cloud Loki (free tier) with a
+shareable dashboard — noted, not built (no code, survives restarts).
 
 ## Roadmap
 

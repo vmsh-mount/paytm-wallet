@@ -1,8 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- Structured JSON logs to stdout. Every line carries correlation_id via MDC. -->
+    <!--
+      Structured JSON to stdout. Every line carries: ts, level, logger, message,
+      service, correlation_id, user_id (when present), and event (for domain /
+      access events). Bearer tokens and full idempotency keys are never logged
+      (see DomainEvents).
+    -->
     <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <fieldNames>
+                <timestamp>ts</timestamp>
+                <logger>logger</logger>
+                <version>[ignore]</version>
+                <levelValue>[ignore]</levelValue>
+                <thread>[ignore]</thread>
+            </fieldNames>
             <includeMdcKeyName>correlation_id</includeMdcKeyName>
             <includeMdcKeyName>user_id</includeMdcKeyName>
             <customFields>{"service":"paytm-wallet"}</customFields>
@@ -11,7 +23,7 @@
 
     <appender name="PLAIN" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} %-5level [%X{correlation_id}] [%X{user_id}] %logger{36} - %msg%n</pattern>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%X{correlation_id}] [%X{user_id}] %logger{36} - %msg %kvp%n</pattern>
         </encoder>
     </appender>
 

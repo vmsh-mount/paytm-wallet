@@ -6,7 +6,7 @@
 | **Invariant** | — |
 | **Owning task** | TASK-08 |
 | **Runs against** | local compose + deployed URL |
-| **Status** | Draft |
+| **Status** | Ready — `LoggingIT` (completed/declined/replay-storm event sequences, one correlation id, 0 ERROR, no raw key) + `DomainEventsTest` / `CorrelationIdFilterTest` / `AccessLogFilterTest`; live capture via `./scripts/burst.sh` + Render stream (TASK-11) |
 
 ## Goal
 

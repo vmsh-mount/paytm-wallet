@@ -2,11 +2,10 @@ package com.paytm.wallet.service.transfer;
 
 import com.paytm.wallet.domain.Transfer;
 import com.paytm.wallet.idempotency.RequestFingerprint;
+import com.paytm.wallet.observability.DomainEvents;
 import com.paytm.wallet.observability.WalletMetrics;
 import com.paytm.wallet.repo.RowMappers;
 import com.paytm.wallet.service.DomainExceptions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -26,8 +25,6 @@ import java.util.stream.Stream;
  * {@code SERIALIZABLE} read-modify-write).
  */
 public abstract class AbstractJdbcTransferEngine implements TransferEngine {
-
-    private static final Logger log = LoggerFactory.getLogger(AbstractJdbcTransferEngine.class);
 
     protected final JdbcTemplate jdbc;
     protected final WalletMetrics metrics;
@@ -92,23 +89,16 @@ public abstract class AbstractJdbcTransferEngine implements TransferEngine {
     }
 
     protected TransferOutcome completed(TransferRequest r) {
-        log.atInfo().addKeyValue("event", "transfer.debited")
-                .addKeyValue("wallet_id", r.fromWalletId()).addKeyValue("amount_paise", r.amountPaise())
-                .log("wallet debited");
-        log.atInfo().addKeyValue("event", "transfer.credited")
-                .addKeyValue("wallet_id", r.toWalletId()).addKeyValue("amount_paise", r.amountPaise())
-                .log("wallet credited");
         Transfer t = insertTransfer(r, Transfer.Status.COMPLETED, null);
+        DomainEvents.transferDebited(t.id(), r.fromWalletId(), r.amountPaise(), balanceOf(r.fromWalletId()));
+        DomainEvents.transferCredited(t.id(), r.toWalletId(), r.amountPaise(), balanceOf(r.toWalletId()));
         metrics.transferCreated();
         return TransferOutcome.fresh(t);
     }
 
     protected TransferOutcome declined(TransferRequest r) {
-        log.atInfo().addKeyValue("event", "transfer.declined")
-                .addKeyValue("from_wallet_id", r.fromWalletId()).addKeyValue("to_wallet_id", r.toWalletId())
-                .addKeyValue("amount_paise", r.amountPaise()).addKeyValue("reason", "insufficient_funds")
-                .log("transfer declined");
         Transfer t = insertTransfer(r, Transfer.Status.DECLINED, "insufficient_funds");
+        DomainEvents.transferDeclined(t.id(), r.fromWalletId(), r.amountPaise(), "insufficient_funds");
         metrics.declinedInsufficientFunds();
         return TransferOutcome.fresh(t);
     }
@@ -118,18 +108,11 @@ public abstract class AbstractJdbcTransferEngine implements TransferEngine {
     private TransferOutcome replayOrConflict(Transfer existing, TransferRequest r) {
         String fingerprint = RequestFingerprint.of(r.fromWalletId(), r.toWalletId(), r.amountPaise());
         if (!fingerprint.equals(existing.requestFingerprint())) {
-            log.atWarn().addKeyValue("event", "transfer.idempotency_conflict")
-                    .addKeyValue("idempotency_key", r.idempotencyKey())
-                    .addKeyValue("transfer_id", existing.id())
-                    .log("idempotency key reused with a different body");
+            DomainEvents.conflict(r.idempotencyKey());
             throw new DomainExceptions.IdempotencyConflict(
                     "idempotency_key already used for a different transfer");
         }
-        log.atInfo().addKeyValue("event", "transfer.idempotent_replay")
-                .addKeyValue("idempotency_key", r.idempotencyKey())
-                .addKeyValue("transfer_id", existing.id())
-                .addKeyValue("status", existing.status().name())
-                .log("idempotent replay");
+        DomainEvents.idempotentReplay(existing.id(), r.idempotencyKey());
         metrics.idempotentReplay();
         return TransferOutcome.replay(existing);
     }
