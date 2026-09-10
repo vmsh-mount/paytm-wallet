@@ -2,7 +2,6 @@ package com.paytm.wallet.service;
 
 import com.paytm.wallet.domain.Transfer;
 import com.paytm.wallet.domain.Wallet;
-import com.paytm.wallet.observability.WalletMetrics;
 import com.paytm.wallet.repo.TransferRepository;
 import com.paytm.wallet.repo.WalletRepository;
 import com.paytm.wallet.service.transfer.TransferEngine;
@@ -19,8 +18,10 @@ import java.util.UUID;
  * movement to the active {@link TransferEngine}. Insufficient funds is a
  * <em>value</em> — {@code Transfer{status=DECLINED}} — not an exception.
  *
- * <p>Idempotency-key handling (replay → original result, different body → 409)
- * lands in TASK-05; for now each call is assumed to carry a fresh key.
+ * <p>Idempotency-key handling (replay → stored result, different body →
+ * {@link DomainExceptions.IdempotencyConflict} → 409) lives in the engine, inside
+ * the money-movement transaction. Domain counters are the engine's too, since it
+ * is the thing that knows whether an effect actually happened or was replayed.
  */
 @Service
 public class TransferService {
@@ -30,14 +31,12 @@ public class TransferService {
     private final TransferEngine engine;
     private final TransferRepository transfers;
     private final WalletRepository wallets;
-    private final WalletMetrics metrics;
 
     public TransferService(TransferEngine engine, TransferRepository transfers,
-                           WalletRepository wallets, WalletMetrics metrics) {
+                           WalletRepository wallets) {
         this.engine = engine;
         this.transfers = transfers;
         this.wallets = wallets;
-        this.metrics = metrics;
     }
 
     public Transfer create(TransferRequest request, String callerUserId, String correlationId) {
@@ -63,14 +62,7 @@ public class TransferService {
                 .addKeyValue("idempotency_key", request.idempotencyKey())
                 .log("transfer requested");
 
-        Transfer result = engine.execute(request, correlationId);
-
-        switch (result.status()) {
-            case COMPLETED -> metrics.transferCreated();
-            case DECLINED -> metrics.declinedInsufficientFunds();
-            case CREATED -> { /* not produced by the engine */ }
-        }
-        return result;
+        return engine.execute(request, correlationId);
     }
 
     public Transfer get(UUID transferId) {

@@ -6,7 +6,7 @@
 | **Invariant** | #3 Exactly-once transfer (conflict path) |
 | **Owning task** | TASK-05 |
 | **Runs against** | local compose + deployed URL |
-| **Status** | Draft |
+| **Status** | Ready — `InvariantsIT.same_key_different_body_is_a_conflict`; live probe = `burst.sh` probe 2 conflict tail (TASK-12) |
 
 ## Goal
 

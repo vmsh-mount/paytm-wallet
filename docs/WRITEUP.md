@@ -33,10 +33,13 @@
 
 ## Where idempotency lives
 
-- `transfers.idempotency_key` is `UNIQUE`. The transfer row (with key) is inserted in the **same transaction** as the debit + credit — commit is atomic, so a key exists iff the money moved.
-- Retry, same body ⇒ return the stored transfer (`wallet.transfers.idempotent_replay` counter).
-- Same key, different body ⇒ `409` via `request_fingerprint` mismatch (hash of from+to+amount).
-- _Race between two first-time requests with the same key:_ TODO (unique-violation ⇒ loser re-reads and returns winner's result).
+- **The transfer row *is* the idempotency record** — `transfers.idempotency_key` is `UNIQUE`, and that row (key + `request_fingerprint` + status) is `INSERT`ed **in the same transaction** as the debit and credit. Commit is atomic, so the key exists iff the money moved — a crash between "debited" and "key recorded" is impossible (verified by `InvariantsIT.crash_between_debit_and_key_persists_nothing`: a tx aborted after the balance updates leaves original balances and no `transfers` row).
+- Engine flow: pre-`SELECT` by key (cheap, unlocked); on miss, take the wallet `FOR UPDATE` locks, then **re-`SELECT` by key under the lock** (serialises identical-key retries — the retry storm does exactly one debit, the other K−1 see the row and return it); on miss again, debit → credit → `INSERT`.
+- Retry, same body ⇒ return the stored transfer verbatim; `wallet.transfers.idempotent_replay` increments (replay only).
+- Same key, **different body** ⇒ `409` — the stored `request_fingerprint` (lowercase hex SHA-256 of `from|to|amount_paise`) doesn't match, so we never trust the new body. Original row untouched.
+- **Declines are idempotent too** — a re-sent DECLINED transfer returns the same DECLINED, no debit attempt.
+- Concurrent first-timers that slip past the locked re-check (only possible if a non-locking writer existed): the `UNIQUE` index rejects the second `INSERT`, that tx rolls back (balance changes undone), and the loser re-`SELECT`s the winner's row and returns it (or 409). This is a belt-and-suspenders fallback — the locked re-check makes it near-unreachable.
+- _Rejected — a separate `idempotency_keys(key, response_json, created_at)` table:_ the standard API-gateway pattern, right when the operation spans services or you want to cache arbitrary responses. Here it's a second write and a two-phase "reserve key → do work → store response" with its own crash windows. One table, one unique index, one atomic commit is strictly simpler for a single DB.
 
 ## Race-free get-or-create (#4)
 

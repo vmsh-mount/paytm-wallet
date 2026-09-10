@@ -16,8 +16,6 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * {@code {error, message, correlation_id}}. The correlation id comes from the MDC
  * set by {@link CorrelationIdFilter}.
  *
- * <p>409 (idempotency conflict) is wired in TASK-06 when that exception starts
- * being thrown.
  */
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -26,6 +24,12 @@ public class ApiExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public Dtos.ErrorResponse notFound(DomainExceptions.NotFound ex) {
         return error("not_found", ex.getMessage());
+    }
+
+    @ExceptionHandler(DomainExceptions.IdempotencyConflict.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Dtos.ErrorResponse idempotencyConflict(DomainExceptions.IdempotencyConflict ex) {
+        return error("idempotency_conflict", ex.getMessage());
     }
 
     @ExceptionHandler(DomainExceptions.InvalidTransfer.class)
