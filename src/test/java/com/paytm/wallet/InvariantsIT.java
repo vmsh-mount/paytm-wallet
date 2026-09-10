@@ -6,13 +6,13 @@ import com.paytm.wallet.service.TransferService;
 import com.paytm.wallet.service.transfer.TransferRequest;
 import com.paytm.wallet.support.AbstractPostgresIT;
 import com.paytm.wallet.support.TestSeed;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -31,9 +31,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * The four graded invariants, end-to-end against a real Postgres. #4 landed with
- * TASK-03; #1 (conservation) and #2 (no overdraft) land here (TASK-04) against
- * the conditional-update engine.
+ * The four graded invariants, end-to-end against a real Postgres:
+ * #4 race-free get-or-create (TASK-03), #1 conservation + #2 no overdraft
+ * (TASK-04), #3 exactly-once / idempotency (TASK-05) — all against the
+ * conditional-update engine.
  */
 @AutoConfigureMockMvc
 class InvariantsIT extends AbstractPostgresIT {
@@ -46,6 +47,9 @@ class InvariantsIT extends AbstractPostgresIT {
 
     @Autowired
     TransferService transferService;
+
+    @Autowired
+    PlatformTransactionManager txManager;
 
     private final Map<UUID, String> owner = new HashMap<>();
 
@@ -293,13 +297,110 @@ class InvariantsIT extends AbstractPostgresIT {
 
     // ---- #3 exactly-once (TASK-05) --------------------------------------
 
-    @Test
-    @Disabled("TASK-05")
-    void same_idempotency_key_applies_once() {
+    private long countKey(String key) {
+        return jdbc.queryForObject(
+                "SELECT count(*) FROM transfers WHERE idempotency_key = ?", Long.class, key);
+    }
+
+    private TransferRequest keyed(UUID from, UUID to, long amount, String key) {
+        return new TransferRequest(from, to, amount, key);
     }
 
     @Test
-    @Disabled("TASK-05")
-    void same_key_different_body_is_409() {
+    void same_key_same_body_applied_once_sequentially() {
+        UUID a = seedWallet("A", 100), b = seedWallet("B", 0);
+        String key = "seq-" + UUID.randomUUID();
+
+        Transfer first = transferService.create(keyed(a, b, 30, key), owner.get(a), "cid");
+        Transfer second = transferService.create(keyed(a, b, 30, key), owner.get(a), "cid");
+
+        assertThat(second).isEqualTo(first);          // byte-identical replay
+        assertThat(balance(a)).isEqualTo(70);         // one debit only
+        assertThat(balance(b)).isEqualTo(30);
+        assertThat(countKey(key)).isEqualTo(1);
+    }
+
+    @Test
+    void same_idempotency_key_applies_once_under_a_retry_storm() throws Exception {
+        UUID a = seedWallet("A", 1_000_000L), b = seedWallet("B", 0);
+        String key = "storm-" + UUID.randomUUID();
+        long amount = 400;
+        int k = 30;
+
+        var results = new CopyOnWriteArrayList<Transfer>();
+        var errors = new CopyOnWriteArrayList<Throwable>();
+        var barrier = new CyclicBarrier(k);
+        try (var pool = Executors.newFixedThreadPool(k)) {
+            var futures = new java.util.ArrayList<Future<?>>();
+            for (int i = 0; i < k; i++) {
+                futures.add(pool.submit(() -> {
+                    barrier.await(10, TimeUnit.SECONDS);
+                    try {
+                        results.add(transferService.create(keyed(a, b, amount, key), owner.get(a), "cid"));
+                    } catch (Throwable t) {
+                        errors.add(t);
+                    }
+                    return null;
+                }));
+            }
+            for (Future<?> f : futures) {
+                f.get(30, TimeUnit.SECONDS);
+            }
+        }
+
+        assertThat(errors).isEmpty();
+        assertThat(results).hasSize(k);
+        assertThat(results.stream().map(Transfer::id).collect(java.util.stream.Collectors.toSet()))
+                .as("all responses are the same transfer").hasSize(1);
+        assertThat(results).allMatch(t -> t.status() == Transfer.Status.COMPLETED);
+        assertThat(countKey(key)).isEqualTo(1);
+        assertThat(balance(a)).isEqualTo(1_000_000L - amount);   // debited exactly once
+        assertThat(balance(b)).isEqualTo(amount);                // credited exactly once
+    }
+
+    @Test
+    void same_key_different_body_is_a_conflict() {
+        UUID a = seedWallet("A", 100), b = seedWallet("B", 0);
+        String key = "conflict-" + UUID.randomUUID();
+
+        transferService.create(keyed(a, b, 30, key), owner.get(a), "cid");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        transferService.create(keyed(a, b, 31, key), owner.get(a), "cid"))
+                .isInstanceOf(com.paytm.wallet.service.DomainExceptions.IdempotencyConflict.class);
+
+        assertThat(balance(a)).isEqualTo(70);   // original untouched, no second debit
+        assertThat(balance(b)).isEqualTo(30);
+        assertThat(countKey(key)).isEqualTo(1);
+    }
+
+    @Test
+    void idempotent_replay_of_declined_is_stable() {
+        UUID a = seedWallet("A", 10), b = seedWallet("B", 0);
+        String key = "declined-" + UUID.randomUUID();
+
+        Transfer first = transferService.create(keyed(a, b, 50, key), owner.get(a), "cid");
+        Transfer replay = transferService.create(keyed(a, b, 50, key), owner.get(a), "cid");
+
+        assertThat(first.status()).isEqualTo(Transfer.Status.DECLINED);
+        assertThat(replay).isEqualTo(first);
+        assertThat(balance(a)).isEqualTo(10); // never debited
+        assertThat(countKey(key)).isEqualTo(1);
+    }
+
+    @Test
+    void crash_between_debit_and_key_persists_nothing() {
+        UUID a = seedWallet("A", 100), b = seedWallet("B", 0);
+        var txTemplate = new org.springframework.transaction.support.TransactionTemplate(txManager);
+
+        txTemplate.executeWithoutResult(status -> {
+            jdbc.update("UPDATE wallets SET balance_paise = balance_paise - 30 WHERE id = ?", a);
+            jdbc.update("UPDATE wallets SET balance_paise = balance_paise + 30 WHERE id = ?", b);
+            status.setRollbackOnly(); // simulate a crash before the transfers-row INSERT commits
+        });
+
+        assertThat(balance(a)).isEqualTo(100);
+        assertThat(balance(b)).isEqualTo(0);
+        assertThat(count("COMPLETED")).isZero();
     }
 }

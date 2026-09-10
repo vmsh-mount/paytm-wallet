@@ -1,6 +1,10 @@
 package com.paytm.wallet.service.transfer;
 
 import com.paytm.wallet.domain.Transfer;
+import com.paytm.wallet.idempotency.RequestFingerprint;
+import com.paytm.wallet.observability.WalletMetrics;
+import com.paytm.wallet.service.DomainExceptions;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
@@ -16,17 +20,17 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Pure unit test with a hand-rolled fake {@link JdbcTemplate} (the local JDK
- * can't run the inline mock maker). Focus: the {@code rowsAffected == 0} branch
- * declines without issuing the credit.
+ * can't run the inline mock maker).
  */
 class ConditionalUpdateEngineTest {
 
     private final List<String> updates = new ArrayList<>();
     private int nextUpdateResult = 1;
-    private Transfer inserted;
+    private Transfer preexisting; // what findByKey(...) returns; null = miss
 
     private final JdbcTemplate fakeJdbc = new JdbcTemplate() {
         @Override
@@ -35,41 +39,54 @@ class ConditionalUpdateEngineTest {
         }
 
         @Override
+        @SuppressWarnings("unchecked")
+        public <T> List<T> query(String sql, RowMapper<T> rowMapper, Object... args) {
+            return preexisting == null ? List.of() : (List<T>) List.of(preexisting); // findByKey
+        }
+
+        @Override
         public int update(String sql, Object... args) {
             updates.add(sql);
-            return sql.contains("- ?") ? nextUpdateResult : 1; // debit is conditional; credit always 1
+            return sql.contains("balance_paise - ?") ? nextUpdateResult : 1;
         }
 
         @Override
         @SuppressWarnings("unchecked")
         public <T> T queryForObject(String sql, RowMapper<T> rowMapper, Object... args) {
-            // args: from, to, amount, key, fingerprint, status, declineReason
-            inserted = new Transfer(UUID.randomUUID(), (UUID) args[0], (UUID) args[1],
+            return (T) new Transfer(UUID.randomUUID(), (UUID) args[0], (UUID) args[1],
                     (long) args[2], (String) args[3], (String) args[4],
                     Transfer.Status.valueOf((String) args[5]), (String) args[6], Instant.now());
-            return (T) inserted;
         }
     };
 
     private final PlatformTransactionManager noopTx = new PlatformTransactionManager() {
         @Override
-        public TransactionStatus getTransaction(TransactionDefinition definition) {
+        public TransactionStatus getTransaction(TransactionDefinition d) {
             return new SimpleTransactionStatus();
         }
 
         @Override
-        public void commit(TransactionStatus status) {
+        public void commit(TransactionStatus s) {
         }
 
         @Override
-        public void rollback(TransactionStatus status) {
+        public void rollback(TransactionStatus s) {
         }
     };
 
-    private final ConditionalUpdateEngine engine = new ConditionalUpdateEngine(fakeJdbc, noopTx);
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    private final ConditionalUpdateEngine engine =
+            new ConditionalUpdateEngine(fakeJdbc, noopTx, new WalletMetrics(registry));
+
+    private static final UUID FROM = UUID.randomUUID();
+    private static final UUID TO = UUID.randomUUID();
 
     private static TransferRequest req(long amount) {
-        return new TransferRequest(UUID.randomUUID(), UUID.randomUUID(), amount, "key-1");
+        return new TransferRequest(FROM, TO, amount, "key-1");
+    }
+
+    private double counter(String name) {
+        return registry.get(name).counter().count();
     }
 
     @Test
@@ -80,8 +97,9 @@ class ConditionalUpdateEngineTest {
 
         assertThat(result.status()).isEqualTo(Transfer.Status.DECLINED);
         assertThat(result.declineReason()).isEqualTo("insufficient_funds");
-        assertThat(updates).hasSize(1); // debit attempted, credit NOT issued
+        assertThat(updates).hasSize(1);
         assertThat(updates.get(0)).contains("balance_paise - ?");
+        assertThat(counter("wallet.transfers.declined")).isEqualTo(1.0);
     }
 
     @Test
@@ -91,9 +109,31 @@ class ConditionalUpdateEngineTest {
         Transfer result = engine.execute(req(30), "cid");
 
         assertThat(result.status()).isEqualTo(Transfer.Status.COMPLETED);
-        assertThat(result.declineReason()).isNull();
         assertThat(updates).hasSize(2);
         assertThat(updates.get(0)).contains("balance_paise - ?");
         assertThat(updates.get(1)).contains("balance_paise + ?");
+        assertThat(counter("wallet.transfers.created")).isEqualTo(1.0);
+    }
+
+    @Test
+    void known_key_same_body_replays_without_touching_balances() {
+        preexisting = new Transfer(UUID.randomUUID(), FROM, TO, 30, "key-1",
+                RequestFingerprint.of(FROM, TO, 30), Transfer.Status.COMPLETED, null, Instant.now());
+
+        Transfer result = engine.execute(req(30), "cid");
+
+        assertThat(result).isEqualTo(preexisting);
+        assertThat(updates).isEmpty(); // no debit, no credit
+        assertThat(counter("wallet.transfers.idempotent_replay")).isEqualTo(1.0);
+    }
+
+    @Test
+    void known_key_different_body_is_a_conflict() {
+        preexisting = new Transfer(UUID.randomUUID(), FROM, TO, 30, "key-1",
+                RequestFingerprint.of(FROM, TO, 30), Transfer.Status.COMPLETED, null, Instant.now());
+
+        assertThatThrownBy(() -> engine.execute(req(999), "cid")) // amount differs
+                .isInstanceOf(DomainExceptions.IdempotencyConflict.class);
+        assertThat(updates).isEmpty();
     }
 }

@@ -6,7 +6,7 @@
 | **Invariant** | #3 Exactly-once transfer |
 | **Owning task** | TASK-05 |
 | **Runs against** | local compose + deployed URL |
-| **Status** | Draft |
+| **Status** | Ready — `InvariantsIT.same_idempotency_key_applies_once_under_a_retry_storm` (K=30), `same_key_same_body_applied_once_sequentially`, `idempotent_replay_of_declined_is_stable`, `crash_between_debit_and_key_persists_nothing`; live probe = `burst.sh` probe 2 (TASK-12) |
 
 ## Goal
 

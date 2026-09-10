@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Not started |
+| **Status** | Done |
 | **Branch** | `task/05-idempotency` |
 | **Depends on** | TASK-04 |
 | **Invariant(s)** | **#3 Exactly-once transfer** |

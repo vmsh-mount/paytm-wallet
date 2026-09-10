@@ -4,6 +4,7 @@ import com.paytm.wallet.service.transfer.ConditionalUpdateEngine;
 import com.paytm.wallet.service.transfer.SelectForUpdateEngine;
 import com.paytm.wallet.service.transfer.SerializableEngine;
 import com.paytm.wallet.service.transfer.TransferEngine;
+import com.paytm.wallet.observability.WalletMetrics;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,8 +21,9 @@ public class TransferEngineConfig {
 
     @Bean
     @ConditionalOnProperty(name = "wallet.transfer.engine", havingValue = "conditional-update", matchIfMissing = true)
-    TransferEngine conditionalUpdateEngine(JdbcTemplate jdbc, PlatformTransactionManager txManager) {
-        return new ConditionalUpdateEngine(jdbc, txManager);
+    TransferEngine conditionalUpdateEngine(JdbcTemplate jdbc, PlatformTransactionManager txManager,
+                                           WalletMetrics metrics) {
+        return new ConditionalUpdateEngine(jdbc, txManager, metrics);
     }
 
     @Bean
