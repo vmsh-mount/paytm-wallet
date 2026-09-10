@@ -81,15 +81,16 @@ public class ConditionalUpdateEngine implements TransferEngine {
                 ordered.get(0), ordered.get(1));
     }
 
+    private static final String INSERT_RETURNING =
+            "INSERT INTO transfers "
+            + "(from_wallet_id, to_wallet_id, amount_paise, idempotency_key, "
+            + " request_fingerprint, status, decline_reason) "
+            + "VALUES (?, ?, ?, ?, ?, ?, ?) "
+            + "RETURNING " + RowMappers.TRANSFER_COLUMNS;
+
     private Transfer insertTransfer(TransferRequest r, Transfer.Status status, String declineReason) {
         String fingerprint = RequestFingerprint.of(r.fromWalletId(), r.toWalletId(), r.amountPaise());
-        return jdbc.queryForObject("""
-                INSERT INTO transfers
-                    (from_wallet_id, to_wallet_id, amount_paise, idempotency_key,
-                     request_fingerprint, status, decline_reason)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                RETURNING """ + RowMappers.TRANSFER_COLUMNS,
-                RowMappers.TRANSFER,
+        return jdbc.queryForObject(INSERT_RETURNING, RowMappers.TRANSFER,
                 r.fromWalletId(), r.toWalletId(), r.amountPaise(), r.idempotencyKey(),
                 fingerprint, status.name(), declineReason);
     }
