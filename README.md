@@ -1,14 +1,19 @@
 # p2p-wallet
 
 [![ci](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
+[![evals](../../actions/workflows/evals.yml/badge.svg)](../../actions/workflows/evals.yml)
 
-Wallet service with peer-to-peer transfers. Round-2 exercise — see [docs/PROBLEM_STATEMENT.md](docs/PROBLEM_STATEMENT.md).
+A wallet & peer-to-peer transfer service — race-free wallets, exactly-once idempotent transfers,
+and no-overdraft under concurrency, backed by a single Postgres. Round-2 exercise — see
+[docs/PROBLEM_STATEMENT.md](docs/PROBLEM_STATEMENT.md).
+
+**Status: done, deployed.** All 13 delivery tasks shipped — see [`SUBMISSION.md`](SUBMISSION.md)
+for the live URL, dashboard, write-up, and eval report links.
 
 Build: `./mvnw -B verify` (Maven wrapper pinned to 3.9.9; needs a JDK 21+ and a Docker daemon for the Testcontainers-backed tests).
 
-**Status: scaffold.** Structure and infra are in place; business logic methods throw `UnsupportedOperationException` with `TODO(scaffold)` markers.
-
 **Delivery plan:** [`docs/plan/`](docs/plan/README.md) — 14 tasks, each with scope, design decisions, acceptance criteria and a test plan. Worked one at a time.
+**Write-up:** [`docs/WRITEUP.md`](docs/WRITEUP.md) (longer form: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)).
 **Evals:** [`evals/`](evals/README.md) — black-box invariant + operational scenario specs; traceability in [`evals/matrix.md`](evals/matrix.md).
 
 ## Stack
@@ -82,7 +87,8 @@ Harden-further path: distroless base (drops the shell — kept here for `HEALTHC
 
 ## Deployment
 
-**Live URL:** [p2p-wallet.onrender.com](https://p2p-wallet.onrender.com) — `GET /healthz`,
+**Live URL:** [p2p-wallet.onrender.com/healthz](https://p2p-wallet.onrender.com/healthz) (the bare
+root requires a bearer token — there's no public route there) — `GET /healthz`,
 `GET /actuator/health`, `GET /metrics`, `GET /dashboard` are all public. `scripts/smoke.sh` passes
 end to end against it.
 

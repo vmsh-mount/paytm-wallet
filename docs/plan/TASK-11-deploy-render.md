@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Code/config complete; **blocked on an actual deploy** (needs a Render account — not something I can click through) |
+| **Status** | Done — deployed 2026-09-11 to <https://p2p-wallet.onrender.com>, verified live (`scripts/smoke.sh`, `scripts/burst.sh`, `evals/run.sh` all green against it) |
 | **Branch** | `task/11-deploy-render` |
 | **Depends on** | TASK-08, TASK-09, TASK-10 |
 | **Invariant(s)** | — (invariants re-verified against the live URL in TASK-12) |

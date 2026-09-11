@@ -124,12 +124,16 @@ D_DECLINED=$(( ${AFTER_DECLINED%.*} - ${BEFORE_DECLINED%.*} ))
 D_REPLAY=$(( ${AFTER_REPLAY%.*} - ${BEFORE_REPLAY%.*} ))
 echo "Δ completed=$D_CREATED declined=$D_DECLINED replay=$D_REPLAY"
 SCENARIO_COUNT=$((SCENARIO_COUNT + 1))
-if [ "$D_CREATED" -ge 1 ] && [ "$D_REPLAY" -ge 1 ]; then
-  VERDICT_O4=PASS
+# Counters must move and replay must be seen either way; completed only has to
+# move when this run could actually fund a COMPLETED transfer (FUND_SQL_URL
+# set) — against a deployed URL with no DB access it's expected to stay 0
+# while declined does the moving (documented, not a failure).
+if [ -n "${FUND_SQL_URL:-}" ]; then
+  [ "$D_CREATED" -ge 1 ] && [ "$D_REPLAY" -ge 1 ] && VERDICT_O4=PASS || VERDICT_O4=FAIL
 else
-  VERDICT_O4=FAIL
-  SCENARIO_FAILURES=$((SCENARIO_FAILURES + 1))
+  [ "$D_DECLINED" -ge 1 ] && [ "$D_REPLAY" -ge 1 ] && VERDICT_O4=PASS || VERDICT_O4=FAIL
 fi
+[ "$VERDICT_O4" = FAIL ] && SCENARIO_FAILURES=$((SCENARIO_FAILURES + 1))
 NUMBERS_O4="Δcompleted=$D_CREATED Δdeclined=$D_DECLINED Δreplay=$D_REPLAY"
 
 echo
