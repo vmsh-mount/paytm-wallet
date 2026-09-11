@@ -124,9 +124,43 @@ and on the host below; only environment variables differ.
 
 ## Burst probes
 
+One-command, black-box correctness checks against any running instance (local compose or
+deployed) — HTTP + `jq` only, no test framework:
+
 ```bash
+./scripts/burst.sh                          # http://localhost:8080
 ./scripts/burst.sh https://your-deployed-url
 ```
+
+Runs 4 probes and prints PASS/`FAIL` per assertion, exiting non-zero on any failure:
+
+| Probe | Invariant | What it does |
+|---|---|---|
+| 1 | #4 race-free get-or-create | `N` concurrent `POST /wallets` for one user → exactly 1 distinct wallet id |
+| 2 | #3 exactly-once retries | `K` concurrent identical transfers → one `201`, the rest `200` replays, same body; same key + different amount → `409` |
+| 3 | #1 conservation under contention | `ROUNDS` concurrent transfers between shared wallets → Σ balances unchanged, no wallet goes negative |
+| 4 | #2 no-overdraft race | concurrent debits past the affordable count → exactly `floor(balance/amount)` complete, the rest decline cleanly (never a `5xx`) |
+
+There is no deposit API by design — money only enters via a transfer from an already-funded
+wallet — so probes 2-4 need a way to seed a balance to exercise the `COMPLETED` path. Set
+`FUND_SQL_URL` (a `psql`-reachable connection string) to fund wallets directly; it auto-defaults
+to the compose Postgres for `localhost` targets, so `./scripts/burst.sh` against a local stack
+needs no configuration. Without it (e.g. a deployed URL with no DB access), the probes still run
+meaningfully against the `DECLINED` path — documented in the script's output, not a failure.
+
+See [`docs/BUG-INJECTION-DEMO.md`](docs/BUG-INJECTION-DEMO.md) for a real before/after showing
+these assertions actually catch a broken invariant.
+
+## Evals
+
+`./evals/run.sh <url>` runs the full scenario suite (`evals/scenarios/*.md`, traceability in
+[`evals/matrix.md`](evals/matrix.md)) — health check, `scripts/burst.sh`, `scripts/smoke.sh`,
+`/metrics` deltas, and (locally) a structured-log scan — and writes a timestamped report to
+`evals/reports/<ISO-8601>.md` plus a matching `evals/reports/<timestamp>/` artifact directory
+(logs + metrics scrapes). See [`evals/reports/EXAMPLE.md`](evals/reports/EXAMPLE.md) for the
+report shape and [`evals/reports/20260911T033247Z.md`](evals/reports/20260911T033247Z.md) for a
+real green run against the local compose stack. CI runs the same harness against the compose
+stack on every PR (`.github/workflows/evals.yml`).
 
 ## Layout
 

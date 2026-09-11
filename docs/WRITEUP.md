@@ -92,6 +92,15 @@ All three are implemented behind `TransferEngine` (`wallet.transfer.engine`, def
 - **No license headers** on source files — single-repo take-home, not distributed; a header
   policy would be noise. Noted here so the omission is a decision, not an oversight.
 
+## Evals
+
+`./scripts/burst.sh` (4 black-box HTTP probes) and `./evals/run.sh` (full scenario suite) are
+TASK-12's harness — see [`evals/README.md`](../evals/README.md). A real, green run against the
+local compose stack is checked in at
+[`evals/reports/20260911T033247Z.md`](../evals/reports/20260911T033247Z.md); CI runs the same
+harness against the compose stack on every PR. [`docs/BUG-INJECTION-DEMO.md`](BUG-INJECTION-DEMO.md)
+demonstrates the assertions actually catch a broken invariant, not just confirm a healthy one.
+
 ## Free-tier cost note
 
 - **Render free web service + Render free managed Postgres. No card. ₹0.** One Docker image

@@ -51,6 +51,11 @@ integration test → eval scenario → burst probe. No invariant without a row.
 
 ## Status
 
-Scaffold — scenario specs are being written per task (each task that touches an
-invariant delivers its `EVAL-*.md`). The runner (`run.sh`, `lib.sh`) lands in
-TASK-12.
+Implemented (TASK-12): `run.sh`/`lib.sh` runs the full scenario suite against any running
+instance and writes a timestamped report to `evals/reports/`. See
+[`evals/reports/20260911T033247Z.md`](reports/20260911T033247Z.md) for a real green run against
+the local compose stack, and [`../docs/BUG-INJECTION-DEMO.md`](../docs/BUG-INJECTION-DEMO.md) for
+proof the assertions catch a deliberately-broken invariant. CI runs it on every PR
+(`.github/workflows/evals.yml`). EVAL-C6/O1/O2 are intentionally skipped by this runner — they're
+asserted elsewhere (`EngineParityIT`, `bench/RESULTS.md`, `scripts/verify-container.sh` in CI's
+container job) — see the report for details.
