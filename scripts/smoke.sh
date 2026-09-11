@@ -4,6 +4,8 @@
 #
 #   ./scripts/smoke.sh https://paytm-wallet.onrender.com
 #
+# Requires: bash, curl, jq (same as burst.sh) — and psql only if SMOKE_FUND_SQL_URL is set.
+#
 # Env:
 #   SMOKE_TOKEN        bearer token identifying the sender (default: dev-token-alice)
 #   SMOKE_TOKEN_B      bearer token identifying the receiver (default: dev-token-bob)
@@ -22,7 +24,7 @@ USER_B="smoke-b-$$-$(date +%s)"
 
 ok()   { printf '  \033[32mok\033[0m  %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; exit 1; }
-json() { python3 -c "import sys,json;print(json.load(sys.stdin)['$1'])"; }
+json() { jq -r ".$1"; }
 
 echo "== target: $BASE_URL =="
 
