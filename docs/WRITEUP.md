@@ -94,5 +94,19 @@ All three are implemented behind `TransferEngine` (`wallet.transfer.engine`, def
 
 ## Free-tier cost note
 
-- Render free web service + Render free managed Postgres. No card. **₹0.**
-- Trade-offs: free web service sleeps after inactivity (cold start ~30–50s); free Postgres expires after 30 days / capped connections. Noted for the reviewer.
+- **Render free web service + Render free managed Postgres. No card. ₹0.** One Docker image
+  (TASK-10's) runs identically via `docker compose` locally and on Render — only env vars differ.
+- **Cold start:** the free web service sleeps after ~15 min idle; first request after sleep is
+  ~30–50s. `GET /healthz` is a dependency-free `200` for warming; an optional, disabled-by-default
+  GitHub Actions cron (`.github/workflows/keepwarm.yml`) can ping it every 10 min at zero cost.
+- **DB lifetime & connections:** the free managed Postgres instance **expires ~30 days after
+  creation** — _redeploy date: TODO once actually created_ — and caps concurrent connections low.
+  `DB_POOL_MAX=5` on Render (vs `10` locally/compose) keeps Hikari inside that cap under a burst.
+- **`DATABASE_URL` bridge:** Render supplies `postgres://user:pass@host/db`; a small
+  `EnvironmentPostProcessor` splits it into `spring.datasource.{url,username,password}` at boot
+  (no shell/entrypoint step, one code path for local `jdbc:` URLs and Render's). Verified locally
+  end-to-end: booting the built jar with a `postgres://…@localhost/wallet` URL migrates, passes
+  readiness, and serves traffic exactly like the native `jdbc:` form.
+- **Fallback:** `fly.toml` documents a Fly.io path if Render's free tier is ever unavailable —
+  not exercised, since Render's managed Postgres is the reason it's primary (Fly Postgres is
+  self-managed).

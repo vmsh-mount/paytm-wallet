@@ -94,7 +94,7 @@ public class AuthFilter implements Filter {
 
     private static final UrlPathHelper PATH_HELPER = UrlPathHelper.defaultInstance;
     private static final Set<String> OPEN_EXACT =
-            Set.of("/actuator", "/metrics", "/dashboard", "/dashboard.html");
+            Set.of("/actuator", "/metrics", "/dashboard", "/dashboard.html", "/healthz");
 
     private static boolean isOpenPath(HttpServletRequest request) {
         // Context path stripped + URL-decoded + ";" params removed (UrlPathHelper),

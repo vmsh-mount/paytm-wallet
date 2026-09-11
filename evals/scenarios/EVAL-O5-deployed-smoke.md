@@ -6,7 +6,7 @@
 | **Invariant** | — (invariants covered by C1–C4 against the same URL) |
 | **Owning task** | TASK-11 |
 | **Runs against** | deployed URL |
-| **Status** | Draft |
+| **Status** | Prepared, blocked on an actual deploy — `scripts/smoke.sh <url>` implements steps 1–10 (`SMOKE_FUND_SQL_URL` covers step 4's funding); the `DATABASE_URL` bridge it depends on is verified end-to-end locally (a `postgres://` URL against real Postgres → Flyway migrates, `/healthz`, readiness, `POST /wallets` all correct). Needs a live Render URL to actually run — TASK-11 can prepare everything except clicking "Deploy" on someone's Render account. |
 
 ## Goal
 
