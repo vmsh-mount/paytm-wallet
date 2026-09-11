@@ -2,11 +2,9 @@
 
 **Repo:** <https://github.com/vmsh-mount/p2p-wallet>
 
-Everything below can be verified from the repo alone — cloning and running it
-locally is the primary way to evaluate this, not the live deployment. The live
-URL is a convenience (it's a free-tier instance that sleeps and eventually
-expires — see [§3](#3-live-deployment-optional)); nothing here
-depends on it staying up.
+Evaluate this by cloning and running it locally (§1) — nothing here depends on
+the live deployment. The live URL (§3) is optional: a free-tier instance that
+sleeps and eventually expires.
 
 ## 1. Evaluate it locally
 
