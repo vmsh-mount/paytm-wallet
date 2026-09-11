@@ -1,121 +1,99 @@
-# Wallet & P2P Transfer — Write-up (one page)
-
-> Skeleton. Fill each section as implementation lands.
+# Wallet & P2P Transfer — Write-up
 
 ## Data model
 
-- `wallets(id, user_id UNIQUE, balance_paise BIGINT CHECK >= 0, created_at)`
-- `transfers(id, from_wallet_id FK, to_wallet_id FK, amount_paise CHECK > 0, idempotency_key UNIQUE, request_fingerprint, status, decline_reason, created_at)` + `CHECK (from_wallet_id <> to_wallet_id)` + `CHECK (status <> 'DECLINED' OR decline_reason IS NOT NULL)`
-- Money = integer **paise** everywhere, stored as `bigint` (max ≈ 9.2×10¹⁸ paise — no realistic overflow). No floats, no `NUMERIC` rupees (invites float thinking, slower).
-- The V1 migration is **frozen** (header comment); Flyway validates checksums on boot, so drift fails fast. Further changes go to `V2+`.
-- Three of the four invariants are made *impossible to violate* by the schema alone: overdraft (`CHECK balance_paise >= 0`), duplicate wallet (`UNIQUE user_id`), duplicate idempotency key (`UNIQUE idempotency_key`). Conservation is the one that still needs the service layer (debit+credit in one tx); the FKs at least guarantee both wallets exist.
-- `request_fingerprint` = lowercase hex SHA-256 of `from|to|amount_paise`, stored on the row so a same-key replay can be checked without trusting the client body (TASK-05's 409 path).
+`wallets(id, user_id UNIQUE, balance_paise BIGINT CHECK >= 0)`;
+`transfers(id, from_wallet_id FK, to_wallet_id FK, amount_paise CHECK > 0, idempotency_key UNIQUE, request_fingerprint, status, decline_reason)` + `CHECK (from_wallet_id <> to_wallet_id)`.
+Money is integer **paise** (`bigint`), never `NUMERIC`/float. Three of the four invariants are made
+*impossible to violate* by the schema alone (`CHECK balance_paise >= 0`, `UNIQUE user_id`,
+`UNIQUE idempotency_key`); conservation is the one thing the service layer still owns
+(debit+credit in one transaction). `request_fingerprint` (SHA-256 of `from|to|amount_paise`) lets a
+same-key replay be checked without trusting the client body.
 
-**Why a balance column, not a double-entry ledger (chosen for R2).** `wallets.balance_paise` is the single source of truth, updated transactionally. One row lock per wallet; conservation is trivial when debit and credit share a transaction; every balance read is a single-row lookup.
+**Rejected — double-entry ledger** (`entries(transfer_id, wallet_id, delta)`, balance = `SUM(delta)`):
+the auditable "real bank" design, but every balance read becomes an aggregate and no-overdraft
+becomes "sum-for-update" — more machinery than this exercise needs. Scale-up path: adopt it when
+an audit trail is required, keep `balance_paise` as a materialised snapshot.
 
-- _Rejected — double-entry ledger_ (`entries(transfer_id, wallet_id, delta)`, balance = `SUM(delta)`): auditable and the "real" bank design, but every balance read becomes an aggregate or needs a maintained snapshot, and no-overdraft becomes "sum-for-update" — more machinery than this exercise needs. **Scale-up path:** move to this when an audit trail or per-entry reconciliation is required; keep the balance column as a materialised snapshot.
+## Simplest-correct mechanism
 
-## Simplest-correct mechanism (conservation + no-overdraft)
+**Chosen — `ConditionalUpdateEngine`**, one `READ COMMITTED` transaction: sorted `FOR UPDATE`
+pre-lock on both wallets (deadlock-free — `A→B` and `B→A` both try `min(id)` first) → one
+`UPDATE … WHERE id=:from AND balance_paise >= :amt` (check + debit atomically; 0 rows ⇒
+`DECLINED`) → credit → insert the `transfers` row, same transaction. `READ COMMITTED` suffices
+because exactly two rows are touched by primary key, both write-locked — no phantom/read-skew
+surface; the `CHECK` constraint is defence-in-depth, not the primary guard.
 
-- **Chosen — `ConditionalUpdateEngine`.** One `READ COMMITTED` transaction:
-  1. `SELECT id FROM wallets WHERE id IN (:from,:to) ORDER BY id FOR UPDATE` — take **both** row locks up front, sorted by id.
-  2. `UPDATE wallets SET balance_paise = balance_paise - :amt WHERE id = :from AND balance_paise >= :amt` — the check and the debit are one atomic statement. `rowsAffected == 0` ⇒ `DECLINED(insufficient_funds)`, no partial apply.
-  3. `UPDATE wallets SET balance_paise = balance_paise + :amt WHERE id = :to`.
-  4. `INSERT` the `transfers` row (COMPLETED or DECLINED) — same transaction, so it commits iff the money moved.
-- **Deadlock-freedom:** the pre-lock is sorted by wallet id, so `A→B` and `B→A` running together both try to lock `min(A,B)` first — one waits, no ABBA cycle. Without the sorted pre-lock, `UPDATE from` then `UPDATE to` could deadlock (`40P01`) and force a retry loop; sorting removes the possibility rather than recovering from it.
-- **Why `READ COMMITTED` is enough:** we touch exactly two rows by primary key, both write-locked; there is no phantom or read-skew surface. The `CHECK (balance_paise >= 0)` is defence-in-depth and should never fire given the predicate.
-- **Conservation proof sketch:** `-amt` and `+amt` of the same integer, committed together; `wallets.balance_paise` has no other writer; no partial commit. Σ is invariant.
-All three are implemented behind `TransferEngine` (`wallet.transfer.engine`, default `conditional-update`) and **all three pass the same `InvariantsIT` / `EngineParityIT` matrix** — correctness is not the differentiator. Cost under contention is; from `bench/RESULTS.md` (16 threads, 8 wallets, 10 s, local Postgres — see the file for the exact commit and re-run instructions):
+All three engines pass the identical invariant test matrix; cost under contention is the
+differentiator (`bench/RESULTS.md`, 16 threads / 8 wallets / 10s local Postgres):
 
-| engine | throughput/s | p50 | p99 | retries | 503s | Σ conserved |
-|--------|-------------:|----:|----:|--------:|-----:|:-----------:|
-| conditional-update | **~7,800** | 1.0 ms | ~14 ms | 0 | 0 | ✓ |
-| select-for-update | ~7,300 | 1.0 ms | ~12 ms | 0 | 0 | ✓ |
-| serializable | ~3,400 | 0.3 ms | tens of ms | thousands | ~10–15 | ✓ |
+| engine | throughput/s | p99 | retries | 503s |
+|--------|------:|----:|--------:|-----:|
+| **conditional-update** | **~7,800** | ~14 ms | 0 | 0 |
+| select-for-update | ~7,300 | ~12 ms | 0 | 0 |
+| serializable | ~3,400 | tens of ms | thousands | ~10–15 |
 
-- **Rejected — `SELECT … FOR UPDATE` + app-side check:** essentially the same throughput as the chosen engine (it holds the same two row locks for the same window), but an extra round trip to read the balance and a wider check-then-act than one conditional `UPDATE`. No reason to prefer it.
-- **Rejected — `SERIALIZABLE`:** ~2.3× slower here and the only engine that shed load — thousands of retries and a handful of `SerializationExhausted` → `503` under this contention (retry budget 20), plus a p99 tail blown out by backoff waits. It moves the reasoning surface to the whole transaction's read/write set and adds a backoff/retry policy to defend. Correct, but more machinery for less throughput.
-- Conditional-update wins on the shortest critical section (one statement does check + debit) and zero retry machinery. Verified by `InvariantsIT`: 200 concurrent mixed transfers (incl. A↔B simultaneously) → `SUM` exactly unchanged, `MIN` ≥ 0, zero deadlocks; a 100-way race on a wallet funded for 5 → exactly 5 COMPLETED.
+*Rejected — `SELECT…FOR UPDATE` + app-side check*: holds the same locks for the same window plus
+an extra round trip; no reason to prefer it. *Rejected — `SERIALIZABLE`*: ~2.3× slower here, the
+only engine that shed load (thousands of retries, occasional `503` under this contention) — it
+moves the reasoning surface to the whole tx's read/write set and needs a backoff policy to defend.
+Conditional-update wins on the shortest critical section and zero retry machinery.
 
 ## Where idempotency lives
 
-- **The transfer row *is* the idempotency record** — `transfers.idempotency_key` is `UNIQUE`, and that row (key + `request_fingerprint` + status) is `INSERT`ed **in the same transaction** as the debit and credit. Commit is atomic, so the key exists iff the money moved — a crash between "debited" and "key recorded" is impossible (verified by `InvariantsIT.crash_between_debit_and_key_persists_nothing`: a tx aborted after the balance updates leaves original balances and no `transfers` row).
-- Engine flow: pre-`SELECT` by key (cheap, unlocked); on miss, take the wallet `FOR UPDATE` locks, then **re-`SELECT` by key under the lock** (serialises identical-key retries — the retry storm does exactly one debit, the other K−1 see the row and return it); on miss again, debit → credit → `INSERT`.
-- Retry, same body ⇒ return the stored transfer verbatim; `wallet.transfers.idempotent_replay` increments (replay only).
-- Same key, **different body** ⇒ `409` — the stored `request_fingerprint` (lowercase hex SHA-256 of `from|to|amount_paise`) doesn't match, so we never trust the new body. Original row untouched.
-- **Declines are idempotent too** — a re-sent DECLINED transfer returns the same DECLINED, no debit attempt.
-- **HTTP surface:** a fresh transfer (COMPLETED *or* DECLINED) is `201`; an idempotent replay is `200` — so a client can distinguish "applied now" from "already processed". A declined transfer is a *successful* API call (`2xx`) that reports a business outcome; returning `4xx` would tell the client to fix its request, which is wrong. `409` only for a genuine key/body mismatch. `TransferEngine` returns a `TransferOutcome{transfer, replayed}` so the controller can pick `200` vs `201` without re-querying.
-- Concurrent first-timers that slip past the locked re-check (only possible if a non-locking writer existed): the `UNIQUE` index rejects the second `INSERT`, that tx rolls back (balance changes undone), and the loser re-`SELECT`s the winner's row and returns it (or 409). This is a belt-and-suspenders fallback — the locked re-check makes it near-unreachable.
-- _Rejected — a separate `idempotency_keys(key, response_json, created_at)` table:_ the standard API-gateway pattern, right when the operation spans services or you want to cache arbitrary responses. Here it's a second write and a two-phase "reserve key → do work → store response" with its own crash windows. One table, one unique index, one atomic commit is strictly simpler for a single DB.
+The `transfers` row **is** the idempotency record — `idempotency_key UNIQUE`, inserted in the
+*same transaction* as the debit/credit, so the key exists iff the money moved (no crash window
+between "debited" and "key recorded" — verified by `InvariantsIT.crash_between_debit_and_key_
+persists_nothing`). Flow: pre-`SELECT` by key (cheap, unlocked) → take wallet locks → **re-`SELECT`
+by key under the lock** (this is what makes a K-way retry storm debit exactly once — the other
+K−1 see the row and return it) → debit → credit → insert. Same key + same body ⇒ return the
+stored transfer (`200`, replay). Same key + **different body** ⇒ `409` — the stored
+`request_fingerprint` doesn't match, so the new body is never trusted; original row untouched.
+Declines replay idempotently too, with no debit attempt. A fresh transfer (`COMPLETED` or
+`DECLINED`) is `201`; a replay is `200` — the client can tell "applied now" from "already
+processed" without inspecting the body.
 
-## Race-free get-or-create (#4)
-
-- `POST /wallets` = `INSERT INTO wallets (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING`, then an **unconditional** `SELECT ... WHERE user_id = ?`. The `UNIQUE(user_id)` index is the single arbiter — the DB never creates a second row; a concurrent loser gets 0 rows affected and falls through to the same `SELECT`, so all N callers return the same wallet id. `userId` *is* the idempotency key here; no client key needed.
-- Always returns **`200`** with `{id, balance_paise}` — "get or create" is one logical operation and the caller can't distinguish (or care) which half ran. New balance is `0`.
-- _Rejected — `SELECT` then `INSERT` in app code:_ classic TOCTOU; two callers both read "absent", both insert, one eats a unique violation.
-- _Rejected — advisory lock / `SERIALIZABLE`:_ heavier, and the unique index already gives the guarantee for free.
-- Verified by `InvariantsIT.concurrent_get_or_create_yields_one_wallet`: 50 threads released from a `CyclicBarrier`, asserts one distinct id across all 50 responses, `count(*) == 1`, no 5xx.
-
-## Auth
-
-- Auth sophistication is explicitly not graded, so it is deliberately minimal: `Authorization: Bearer <token>` → `userId` via a static `token:userId` map from `wallet.auth.tokens` (`AUTH_TOKENS`, a `sync:false` secret on Render). No DB table, no issuance / refresh / expiry / JWT.
-- A ~30-line servlet `Filter`, **not Spring Security** — mapping one header to one string does not justify Security's autoconfig and filter-chain surface. Reconsider only if the reviewer wants method-level security (noted).
-- Filter order: `CorrelationIdFilter` → `AuthFilter`. Unknown/missing/malformed token → `401` `{error,message,correlation_id}`; `/actuator/**` stays open. Token compared constant-time (`MessageDigest.isEqual`) against every entry; only the resolved `userId` is logged / put in MDC, never the token.
-- The caller-owns-the-source-wallet check is **not** here — it needs the wallet row, so it lives in `TransferService` (TASK-06). The filter only authenticates.
+*Rejected — a separate `idempotency_keys` table*: the API-gateway pattern for when the operation
+spans services; here it's a second write and a "reserve → do work → store" sequence with its own
+crash windows. One unique index, one atomic commit is strictly simpler for a single DB.
 
 ## Consistency vs availability
 
-- Single Postgres, synchronous commits. Chosen **CP**: a partitioned / unreachable DB returns `5xx` rather than serving a possibly-stale balance or accepting a write it cannot durably record.
-- Given up: write availability during DB downtime; horizontal write scaling; multi-region latency.
-- _Acceptable because:_ TODO.
+Single Postgres, synchronous commits — chosen **CP**: a partitioned/unreachable DB returns `5xx`
+rather than serve a stale balance or accept a write it can't durably record. Given up: write
+availability during DB downtime, horizontal write scaling, multi-region latency. Acceptable here
+because a wallet ledger must never silently diverge from its true balance — an unavailable
+response is recoverable (retry), a wrong balance is not.
 
 ## AI: directed vs decided
 
-| Area | Directed (I chose, AI typed) | Decided (I accepted AI's design) |
+| Area | Directed (I chose) | Decided (AI's call) |
 |---|---|---|
-| Stack (Java 21 / Spring Boot 3 / JDBC) | ✅ | |
-| Three swappable transfer engines | ✅ | |
-| Maven wrapper (pinned 3.9.9) + Testcontainers-in-CI over H2 | ✅ | |
-| GitHub Actions YAML, `.editorconfig` contents | | ✅ |
-| Servlet filter (not Spring Security), static token map, `/actuator` allowlist | ✅ | |
-| `RequestContext` as ThreadLocal, 401 JSON shape | | ✅ |
-| ... | | |
-
-## Build & tooling
-
-- `./mvnw -B verify` is the single source of truth — Maven wrapper pinned to 3.9.9 so
-  CI and a fresh clone build identically, no global Maven assumed. (The Dockerfile build
-  stage still uses its base image's Maven; unifying on the wrapper is a TASK-10 cleanup.)
-- Integration tests run against a real Postgres via Testcontainers (not H2): the
-  invariants depend on Postgres semantics (`ON CONFLICT`, `FOR UPDATE`, `SERIALIZABLE`)
-  that an embedded DB would fake. Cost: CI needs a Docker daemon (GitHub-hosted runners have one).
-- **No license headers** on source files — single-repo take-home, not distributed; a header
-  policy would be noise. Noted here so the omission is a decision, not an oversight.
-
-## Evals
-
-`./scripts/burst.sh` (4 black-box HTTP probes) and `./evals/run.sh` (full scenario suite) are
-TASK-12's harness — see [`evals/README.md`](../evals/README.md). A real, green run against the
-local compose stack is checked in at
-[`evals/reports/20260911T033247Z.md`](../evals/reports/20260911T033247Z.md); CI runs the same
-harness against the compose stack on every PR. [`docs/BUG-INJECTION-DEMO.md`](BUG-INJECTION-DEMO.md)
-demonstrates the assertions actually catch a broken invariant, not just confirm a healthy one.
+| Balance column not ledger; paise as `bigint`; fingerprint definition | ✅ | |
+| `ON CONFLICT` get-or-create; sorted `FOR UPDATE` + conditional `UPDATE` | ✅ | |
+| Single-table idempotency, same-tx commit; declined-is-`201`/replay-is-`200` | ✅ | |
+| Filter-not-Spring-Security auth; implement all 3 engines to compare | ✅ | |
+| Closed log-event enum, hash-the-key rule; static dashboard as primary surface | ✅ | |
+| Non-root/read-only rootfs, readiness≠liveness split, alpine over distroless | ✅ | |
+| Render primary + Fly fallback; bash-canonical black-box harness | ✅ | |
+| Exact GitHub Actions YAML / `.editorconfig`; `RequestContext` code style | | ✅ |
+| Benchmark harness shape, workload-mix constants; dashboard HTML/JS | | ✅ |
+| Healthcheck command, entrypoint details; report markdown layout, `lib.sh` API | | ✅ |
 
 ## Free-tier cost note
 
-- **Render free web service + Render free managed Postgres. No card. ₹0.** One Docker image
-  (TASK-10's) runs identically via `docker compose` locally and on Render — only env vars differ.
-- **Cold start:** the free web service sleeps after ~15 min idle; first request after sleep is
-  ~30–50s. `GET /healthz` is a dependency-free `200` for warming; an optional, disabled-by-default
-  GitHub Actions cron (`.github/workflows/keepwarm.yml`) can ping it every 10 min at zero cost.
-- **DB lifetime & connections:** the free managed Postgres instance **expires ~30 days after
-  creation** — _redeploy date: TODO once actually created_ — and caps concurrent connections low.
-  `DB_POOL_MAX=5` on Render (vs `10` locally/compose) keeps Hikari inside that cap under a burst.
-- **`DATABASE_URL` bridge:** Render supplies `postgres://user:pass@host/db`; a small
-  `EnvironmentPostProcessor` splits it into `spring.datasource.{url,username,password}` at boot
-  (no shell/entrypoint step, one code path for local `jdbc:` URLs and Render's). Verified locally
-  end-to-end: booting the built jar with a `postgres://…@localhost/wallet` URL migrates, passes
-  readiness, and serves traffic exactly like the native `jdbc:` form.
-- **Fallback:** `fly.toml` documents a Fly.io path if Render's free tier is ever unavailable —
-  not exercised, since Render's managed Postgres is the reason it's primary (Fly Postgres is
-  self-managed).
+**Render free web service + Render free managed Postgres — ₹0, no card.** One Docker image runs
+identically via `docker compose` locally and on Render; only env vars differ. **Cold start:** the
+free web service sleeps after ~15 min idle — first request after sleep is ~30–50s (`GET /healthz`
+is a dependency-free warm-up target; `.github/workflows/keepwarm.yml` can ping it every 10 min,
+disabled by default). **DB lifetime:** the free managed Postgres **expires ~30 days after
+creation** and caps connections low — `DB_POOL_MAX=5` on Render (vs `10` locally) keeps Hikari
+inside that cap under a burst. **Fallback:** `fly.toml` documents a Fly.io path (not exercised —
+Fly Postgres is self-managed, which is why Render is primary).
+
+---
+
+Longer form: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md). Evals: [`evals/README.md`](../evals/README.md),
+a real green run against the live deployment at
+[`evals/reports/20260911T050309Z.md`](../evals/reports/20260911T050309Z.md), and proof the
+assertions catch a broken invariant at [`docs/BUG-INJECTION-DEMO.md`](BUG-INJECTION-DEMO.md).

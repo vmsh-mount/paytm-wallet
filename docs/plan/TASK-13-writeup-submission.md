@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Not started |
+| **Status** | Done |
 | **Branch** | `task/13-writeup-submission` |
 | **Depends on** | all |
 | **Invariant(s)** | — |
