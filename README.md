@@ -82,7 +82,9 @@ Harden-further path: distroless base (drops the shell — kept here for `HEALTHC
 
 ## Deployment
 
-**Live URL:** _not yet deployed — see below._
+**Live URL:** [p2p-wallet.onrender.com](https://p2p-wallet.onrender.com) — `GET /healthz`,
+`GET /actuator/health`, `GET /metrics`, `GET /dashboard` are all public. `scripts/smoke.sh` passes
+end to end against it.
 
 One image (TASK-10's), many envs: the exact same Docker image runs locally via `docker compose`
 and on the host below; only environment variables differ.
@@ -113,8 +115,10 @@ and on the host below; only environment variables differ.
   psql-reachable connection string to exercise a COMPLETED transfer (there is no deposit API by
   design — money only enters via a transfer from an already-funded wallet); without it, the script
   still runs end to end against the DECLINED path.
-- **Public observability:** once deployed, this section gets the live URL, the Render log-stream
-  link (or a `docs/media/` burst recording — TASK-08's fallback), and the dashboard/metrics links.
+- **Public observability:** [`/metrics`](https://p2p-wallet.onrender.com/metrics) and
+  [`/dashboard`](https://p2p-wallet.onrender.com/dashboard) are public, no auth. Log stream: Render's
+  dashboard log view is account-gated — a public link or `docs/media/` burst recording (TASK-08's
+  fallback) is still TODO.
 - **Teardown:** delete the Blueprint from the Render dashboard (removes the web service and the
   database together) — no other cleanup.
 
