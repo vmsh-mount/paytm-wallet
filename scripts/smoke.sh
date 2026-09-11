@@ -2,7 +2,7 @@
 # Post-deploy smoke test — EVAL-O5. Get-or-create -> (fund, optional) -> transfer
 # -> replay -> /metrics -> /dashboard, against a real deployed URL.
 #
-#   ./scripts/smoke.sh https://paytm-wallet.onrender.com
+#   ./scripts/smoke.sh https://p2p-wallet.onrender.com
 #
 # Requires: bash, curl, jq (same as burst.sh) — and psql only if SMOKE_FUND_SQL_URL is set.
 #
@@ -81,7 +81,7 @@ code=$(curl -s -o /tmp/smoke-metrics -w '%{http_code}' "$BASE_URL/metrics")
 [ "$code" = 200 ] && grep -q '^wallet_transfers_' /tmp/smoke-metrics && ok "/metrics -> 200, domain counters present" \
   || fail "/metrics -> $code"
 code=$(curl -s -o /tmp/smoke-dash -w '%{http_code}' "$BASE_URL/dashboard")
-[ "$code" = 200 ] && grep -qi 'paytm-wallet' /tmp/smoke-dash && ok "/dashboard -> 200" || fail "/dashboard -> $code"
+[ "$code" = 200 ] && grep -qi 'p2p-wallet' /tmp/smoke-dash && ok "/dashboard -> 200" || fail "/dashboard -> $code"
 
 echo
 echo "smoke test passed against $BASE_URL"

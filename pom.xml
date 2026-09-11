@@ -14,7 +14,7 @@
     <groupId>com.paytm</groupId>
     <artifactId>wallet</artifactId>
     <version>0.1.0</version>
-    <name>paytm-wallet</name>
+    <name>p2p-wallet</name>
     <description>Wallet service with peer-to-peer transfers</description>
 
     <properties>

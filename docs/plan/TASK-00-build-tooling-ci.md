@@ -56,7 +56,7 @@ Docker; CI is green on `main`; `docker build` produces a runnable image.
 
 - [ ] `./mvnw -B verify` green on a machine with no global Maven
 - [ ] CI run on `main` is green and visible publicly
-- [ ] `docker build -t paytm-wallet:dev .` succeeds; `docker run` boots and fails
+- [ ] `docker build -t p2p-wallet:dev .` succeeds; `docker run` boots and fails
       health only for lack of DB (not classpath/JVM errors)
 - [ ] `./mvnw -q dependency:tree` has no `SNAPSHOT`s
 

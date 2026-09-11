@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Paytm Wallet & P2P Transfer
+  title: P2P Wallet & Transfer Service
   version: 0.1.0
   description: >
     Wallet get-or-create and peer-to-peer transfers. Money is integer paise.
