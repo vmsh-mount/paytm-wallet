@@ -18,7 +18,7 @@ public class ConditionalUpdateEngine extends AbstractJdbcTransferEngine {
 
     public ConditionalUpdateEngine(JdbcTemplate jdbc, PlatformTransactionManager txManager,
                                    WalletMetrics metrics) {
-        super(jdbc, txManager, metrics, TransactionDefinition.ISOLATION_READ_COMMITTED);
+        super(jdbc, txManager, metrics, Engine.CONDITIONAL_UPDATE, TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
     @Override

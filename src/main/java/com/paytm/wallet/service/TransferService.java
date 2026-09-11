@@ -4,6 +4,7 @@ import com.paytm.wallet.domain.Transfer;
 import com.paytm.wallet.domain.Wallet;
 import com.paytm.wallet.observability.CorrelationIdFilter;
 import com.paytm.wallet.observability.DomainEvents;
+import com.paytm.wallet.observability.WalletMetrics;
 import com.paytm.wallet.repo.TransferRepository;
 import com.paytm.wallet.repo.WalletRepository;
 import com.paytm.wallet.service.transfer.TransferEngine;
@@ -31,12 +32,14 @@ public class TransferService {
     private final TransferEngine engine;
     private final TransferRepository transfers;
     private final WalletRepository wallets;
+    private final WalletMetrics metrics;
 
     public TransferService(TransferEngine engine, TransferRepository transfers,
-                           WalletRepository wallets) {
+                           WalletRepository wallets, WalletMetrics metrics) {
         this.engine = engine;
         this.transfers = transfers;
         this.wallets = wallets;
+        this.metrics = metrics;
     }
 
     public TransferOutcome create(TransferRequest request, String callerUserId, String correlationId) {
@@ -74,13 +77,28 @@ public class TransferService {
         DomainEvents.transferReceived(request.fromWalletId(), request.toWalletId(),
                 request.amountPaise(), request.idempotencyKey());
 
+        String engineTag = engine.engineType().configValue();
         long startNanos = System.nanoTime();
-        TransferOutcome outcome = engine.execute(request);
-        if (!outcome.replayed() && outcome.transfer().status() == Transfer.Status.COMPLETED) {
-            DomainEvents.transferCompleted(outcome.transfer().id(), request.amountPaise(),
-                    (System.nanoTime() - startNanos) / 1_000_000.0);
+        String outcomeTag = "error";
+        try {
+            TransferOutcome outcome = engine.execute(request);
+            outcomeTag = outcome.replayed() ? "replayed"
+                    : outcome.transfer().status() == Transfer.Status.COMPLETED ? "completed" : "declined";
+            if ("completed".equals(outcomeTag)) {
+                DomainEvents.transferCompleted(outcome.transfer().id(), request.amountPaise(),
+                        (System.nanoTime() - startNanos) / 1_000_000.0);
+            }
+            return outcome;
+        } catch (DomainExceptions.IdempotencyConflict e) {
+            outcomeTag = "conflict";
+            throw e;
+        } catch (DomainExceptions.SerializationExhausted e) {
+            outcomeTag = "exhausted";
+            throw e;
+        } finally {
+            metrics.transferObserved(engineTag, outcomeTag, request.amountPaise(),
+                    System.nanoTime() - startNanos);
         }
-        return outcome;
     }
 
     public Transfer get(UUID transferId) {

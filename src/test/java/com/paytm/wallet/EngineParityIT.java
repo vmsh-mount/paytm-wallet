@@ -58,7 +58,7 @@ class EngineParityIT extends AbstractPostgresIT {
             case SELECT_FOR_UPDATE -> new SelectForUpdateEngine(jdbc, txManager, metrics);
             case SERIALIZABLE -> new SerializableEngine(jdbc, txManager, metrics, 50);
         };
-        return new TransferService(e, transferRepository, walletRepository);
+        return new TransferService(e, transferRepository, walletRepository, metrics);
     }
 
     private static int poolSize(Engine engine) {

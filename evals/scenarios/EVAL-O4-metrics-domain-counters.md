@@ -6,7 +6,7 @@
 | **Invariant** | — |
 | **Owning task** | TASK-09 |
 | **Runs against** | local compose + deployed URL |
-| **Status** | Draft |
+| **Status** | Ready — `MetricsIT` (10 completed + 3 declined + 5 replays → scrape deltas exact; `/metrics` + `/dashboard` open) + `WalletMetricsTest` / `MetricsControllerTest`; live pre/post scrape in `./scripts/burst.sh` (TASK-12) |
 
 ## Goal
 
@@ -40,10 +40,10 @@ and the numbers move correctly in response to real traffic.
 - [ ] `GET /metrics` → `200`, Prometheus text format, **no auth required**.
 - [ ] Series present: `http_server_requests_seconds{quantile="0.99"}`,
       `http_server_requests_seconds_count`,
-      `wallet_transfers_created_total`,
+      `wallet_transfers_completed_total`,
       `wallet_transfers_declined_total{reason="insufficient_funds"}`,
       `wallet_transfers_idempotent_replay_total`.
-- [ ] `Δ wallet_transfers_created_total == C + 1` (the `R` group's first send).
+- [ ] `Δ wallet_transfers_completed_total == C + 1` (the `R` group's first send).
 - [ ] `Δ wallet_transfers_declined_total{reason="insufficient_funds"} == D`.
 - [ ] `Δ wallet_transfers_idempotent_replay_total == R - 1`.
 - [ ] `Δ http_server_requests_seconds_count == C + D + R` (+ the 2 scrapes if the
