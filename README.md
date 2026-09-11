@@ -52,13 +52,39 @@ A **declined** transfer is a *successful* call reporting a business outcome — 
 `201` (new) vs `200` (replay) lets a client tell "my write happened now" from "already processed".
 Every error body is `{error, message, correlation_id}`; the id matches the `X-Correlation-Id` response header.
 
-## Run locally
+## Run with Docker
 
 ```bash
-docker compose up --build      # app + Postgres, one command, http://localhost:8080
+docker compose up --build      # app + Postgres, one command → http://localhost:8080
+docker compose down -v         # stop and wipe the DB volume
 ```
 
+`cp .env.example .env` first to override `TRANSFER_ENGINE` / `AUTH_TOKENS` / `DB_POOL_MAX`.
+Compose waits for Postgres to be healthy, then starts the app; Flyway migrates on boot; the app's
+own healthcheck gates `healthy`.
+
 Without Docker: `./mvnw spring-boot:run` (needs a local Postgres matching `application.yml` defaults).
+
+### Image & hardening
+
+| | |
+|---|---|
+| Base | `eclipse-temurin:21-jre-alpine` (build on `…-jdk-alpine` + the Maven wrapper), both **digest-pinned** |
+| Size | ~100 MB (multi-stage; Spring Boot **layered jar** — deps / loader / snapshot-deps / application as separate image layers for rebuild cache) |
+| User | non-root `app` (brief requirement); compose adds `read_only` rootfs + `tmpfs:/tmp` + `no-new-privileges` |
+| Health | `HEALTHCHECK` → `GET /actuator/health/readiness` (busybox `wget`, no `curl` installed). **readiness = process up AND DB reachable**; **liveness = process up** — so a DB blip degrades readiness (LB stops routing) without triggering a restart loop |
+| Migrations | in-app Flyway on startup — one moving part, same image on Render, no init container. Two replicas racing migrations is safe (Flyway takes a lock) |
+| Scan | `trivy` (HIGH/CRITICAL, unfixed ignored) runs in CI, informational |
+
+Harden-further path: distroless base (drops the shell — kept here for `HEALTHCHECK` + debugging on a free host). Multi-arch: `docker buildx build --platform linux/amd64,linux/arm64`.
+
+`scripts/verify-container.sh` (run in CI) asserts all of the above end to end.
+
+## Burst probes
+
+```bash
+./scripts/burst.sh https://your-deployed-url
+```
 
 ## Burst probes
 

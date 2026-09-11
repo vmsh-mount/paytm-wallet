@@ -6,7 +6,7 @@
 | **Invariant** | — |
 | **Owning task** | TASK-10 |
 | **Runs against** | local / CI |
-| **Status** | Draft |
+| **Status** | Ready — `scripts/verify-container.sh` in CI asserts non-root + HEALTHCHECK + multi-stage layers + image <= 300 MB |
 
 ## Goal
 
