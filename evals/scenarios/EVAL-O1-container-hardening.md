@@ -15,19 +15,19 @@ The image is multi-stage, runs as a non-root user, and has a working
 
 ## Preconditions
 
-- `docker build -t paytm-wallet:eval .` succeeds.
+- `docker build -t p2p-wallet:eval .` succeeds.
 
 ## Procedure
 
 1. `docker build` and record final image size + `docker history` layer count.
-2. `docker inspect paytm-wallet:eval --format '{{.Config.User}}'`.
+2. `docker inspect p2p-wallet:eval --format '{{.Config.User}}'`.
 3. `docker inspect --format '{{json .Config.Healthcheck}}'`.
 4. `docker run` with a reachable DB; poll `docker inspect --format
    '{{.State.Health.Status}}'` until `healthy` or 60s timeout.
 5. Confirm build is multi-stage: `grep -c '^FROM ' Dockerfile` ≥ 2 and the
    runtime stage has no Maven/JDK-build tooling (`docker run ... which mvn` fails).
 6. `docker run ... id` → uid ≠ 0.
-7. (optional) `trivy image paytm-wallet:eval` → no HIGH/CRITICAL in app layers.
+7. (optional) `trivy image p2p-wallet:eval` → no HIGH/CRITICAL in app layers.
 
 ## Pass criteria
 

@@ -17,7 +17,7 @@
             </fieldNames>
             <includeMdcKeyName>correlation_id</includeMdcKeyName>
             <includeMdcKeyName>user_id</includeMdcKeyName>
-            <customFields>{"service":"paytm-wallet"}</customFields>
+            <customFields>{"service":"p2p-wallet"}</customFields>
         </encoder>
     </appender>
 

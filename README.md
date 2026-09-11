@@ -1,4 +1,4 @@
-# paytm-wallet
+# p2p-wallet
 
 [![ci](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 

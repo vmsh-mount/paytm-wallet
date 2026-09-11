@@ -4,16 +4,16 @@
 # documented, not exercised in CI.
 #
 # Setup (one time):
-#   fly launch --no-deploy --dockerfile Dockerfile --name paytm-wallet
-#   fly postgres create --name paytm-wallet-db --vm-size shared-cpu-1x --volume-size 1
-#   fly postgres attach paytm-wallet-db -a paytm-wallet   # wires DATABASE_URL as a secret
+#   fly launch --no-deploy --dockerfile Dockerfile --name p2p-wallet
+#   fly postgres create --name p2p-wallet-db --vm-size shared-cpu-1x --volume-size 1
+#   fly postgres attach p2p-wallet-db -a p2p-wallet   # wires DATABASE_URL as a secret
 #   fly secrets set AUTH_TOKENS='...' TRANSFER_ENGINE=conditional-update DB_POOL_MAX=5
 #   fly deploy
 #
 # `fly postgres attach` sets DATABASE_URL in postgres:// form — the same
 # RenderDatabaseUrlEnvironmentPostProcessor bridges it, no Fly-specific code.
 
-app = "paytm-wallet"
+app = "p2p-wallet"
 primary_region = "bom" # Mumbai — closest to India-based reviewers
 
 [build]

@@ -1,6 +1,6 @@
 spring:
   application:
-    name: paytm-wallet
+    name: p2p-wallet
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/wallet}
     username: ${DATABASE_USER:wallet}
