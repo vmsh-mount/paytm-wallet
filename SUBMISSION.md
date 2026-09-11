@@ -3,8 +3,7 @@
 **Repo:** <https://github.com/vmsh-mount/p2p-wallet>
 
 Evaluate this by cloning and running it locally (§1) — nothing here depends on
-the live deployment. The live URL (§3) is optional: a free-tier instance that
-sleeps and eventually expires.
+the live deployment. The live URL is optional.
 
 ## 1. Evaluate it locally
 
@@ -32,7 +31,7 @@ To run the server-side test suite instead (`InvariantsIT`, `EngineParityIT`,
 etc. — the same invariants proven white-box against all three transfer
 engines): `./mvnw verify` (needs a JDK 21+ and a Docker daemon for
 Testcontainers).
-
+    
 ## 2. Deliverables checklist
 
 Mapped directly to the brief's "what to send back":
@@ -42,8 +41,8 @@ Mapped directly to the brief's "what to send back":
 | Public repo | <https://github.com/vmsh-mount/p2p-wallet> |
 | One-command burst script | [`scripts/burst.sh`](scripts/burst.sh) — §1 above |
 | One-page write-up | [`docs/WRITEUP.md`](docs/WRITEUP.md) (longer form: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)) |
-| Live URL *(optional — see §3)* | <https://p2p-wallet.onrender.com> |
-| Public logs link *(optional — see §3)* | Render's log view is account-gated; a burst run's structured-log transcript is captured in the eval report below instead |
+| Live URL *(optional)* | <https://p2p-wallet.onrender.com> |
+| Public logs link *(optional)* | Render's log view is account-gated; a burst run's structured-log transcript is captured in the eval report below instead |
 
 **Proof of correctness, already run and committed:**
 
@@ -54,38 +53,7 @@ Mapped directly to the brief's "what to send back":
 | [`bench/RESULTS.md`](bench/RESULTS.md) | Throughput/latency comparison across all three transfer-engine candidates |
 | CI (green on `main`) | `./mvnw verify` + container hardening checks + the eval harness, all run on every push |
 
-## 3. Live deployment (optional)
-
-<https://p2p-wallet.onrender.com> — Render free web service + free managed
-Postgres, ₹0, deployed 2026-09-11. Public endpoints: [`/dashboard`](https://p2p-wallet.onrender.com/dashboard),
-[`/metrics`](https://p2p-wallet.onrender.com/metrics), `/healthz`, `/actuator/health`.
-
-Free-tier caveats, so a dead link isn't mistaken for a broken submission:
-
-- **Cold start** — the service sleeps after ~15 min idle; the first request
-  after that takes ~30–50s while Render restarts the container. `GET /healthz`
-  is a dependency-free way to warm it before running anything else.
-- **DB lifetime** — the managed Postgres instance expires **~30 days after
-  creation** (created 2026-09-11 → expect ~2026-10-11). After that the live URL
-  stops responding; that's the free-tier expiry, not a regression.
-  `docker compose up --build` (§1) reproduces the identical image and
-  migrations locally, indefinitely.
-
-If you want to run the burst probes against the live URL yourself:
-
-```bash
-./scripts/burst.sh https://p2p-wallet.onrender.com
-```
-
-The dev bearer tokens are still enabled on this deployment for grading. There's
-no deposit API by design (money only enters via a transfer from an
-already-funded wallet), so without direct database access the probes exercise
-the `DECLINED` and idempotent-replay paths rather than `COMPLETED` — the
-script says so in its own output, it isn't a failure. The linked eval report
-above was run with database access and confirms the `COMPLETED` path and its
-counters too.
-
-## 4. Where to read more
+## 3. Where to read more
 
 - [`README.md`](README.md) — stack, full API reference, status-code contract, how to run/deploy
 - [`docs/WRITEUP.md`](docs/WRITEUP.md) — data model, the simplest-correct mechanism and what was
@@ -95,7 +63,3 @@ counters too.
 - [`evals/`](evals/README.md) — every scenario spec plus the traceability matrix
   ([`evals/matrix.md`](evals/matrix.md)) mapping each invariant to its schema guard, unit test,
   integration test, and black-box probe
-
----
-Verified 2026-09-11: fresh-clone `docker compose up --build` → `burst.sh` green locally; the same
-probes green against the live deployment; `./mvnw verify` green in CI.
