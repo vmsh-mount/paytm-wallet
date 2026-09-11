@@ -9,18 +9,26 @@
 # Env:
 #   SMOKE_TOKEN        bearer token identifying the sender (default: dev-token-alice)
 #   SMOKE_TOKEN_B      bearer token identifying the receiver (default: dev-token-bob)
+#   SMOKE_USER_A       user_id SMOKE_TOKEN resolves to server-side (default: alice)
+#   SMOKE_USER_B       user_id SMOKE_TOKEN_B resolves to server-side (default: bob)
 #   SMOKE_FUND_SQL_URL optional: a psql-reachable connection string. If set, the
 #                      sender's wallet is funded directly (there is no deposit
 #                      API by design — money only enters via a transfer from an
 #                      already-funded wallet) so the smoke run exercises a
 #                      COMPLETED transfer, not just the decline path.
+#
+# The wallet's user_id MUST match the identity the bearer token authenticates as
+# — TransferService rejects a transfer whose caller doesn't own the source
+# wallet (403), so a synthetic per-run user_id here would always 403, not
+# exercise the transfer at all. Wallets are get-or-create (idempotent by
+# user_id), so reusing "alice"/"bob" across runs is correct, not a collision.
 set -euo pipefail
 
 BASE_URL="${1:?Usage: smoke.sh <deployed-url>}"
 TOKEN_A="${SMOKE_TOKEN:-dev-token-alice}"
 TOKEN_B="${SMOKE_TOKEN_B:-dev-token-bob}"
-USER_A="smoke-a-$$-$(date +%s)"
-USER_B="smoke-b-$$-$(date +%s)"
+USER_A="${SMOKE_USER_A:-alice}"
+USER_B="${SMOKE_USER_B:-bob}"
 
 ok()   { printf '  \033[32mok\033[0m  %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; exit 1; }
@@ -49,8 +57,10 @@ if [ -n "${SMOKE_FUND_SQL_URL:-}" ]; then
   amount=30000
   expect_status=COMPLETED
 else
-  echo "  (no SMOKE_FUND_SQL_URL — A has 0 balance, expecting a clean DECLINE)"
-  amount=100
+  echo "  (no SMOKE_FUND_SQL_URL — expecting a clean DECLINE)"
+  # A's wallet is reused run to run (get-or-create by user_id); an amount this
+  # large declines regardless of whatever balance a prior funded run left behind.
+  amount=999999999999
   expect_status=DECLINED
 fi
 
