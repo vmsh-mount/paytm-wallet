@@ -80,11 +80,43 @@ Harden-further path: distroless base (drops the shell — kept here for `HEALTHC
 
 `scripts/verify-container.sh` (run in CI) asserts all of the above end to end.
 
-## Burst probes
+## Deployment
 
-```bash
-./scripts/burst.sh https://your-deployed-url
-```
+**Live URL:** _not yet deployed — see below._
+
+One image (TASK-10's), many envs: the exact same Docker image runs locally via `docker compose`
+and on the host below; only environment variables differ.
+
+- **Primary: Render**, via the committed [`render.yaml`](render.yaml) blueprint — free web
+  service (`runtime: docker`) + free managed Postgres, ₹0, no card.
+  1. Push this repo to GitHub.
+  2. On [render.com](https://render.com): **New → Blueprint**, point at the repo/branch.
+     Render builds the `Dockerfile` and provisions the DB from `render.yaml` — no other
+     console-only config.
+  3. Set the `AUTH_TOKENS` secret in the dashboard (`sync: false` — never committed).
+     Generate real tokens for the submission; only hand out the ones a reviewer needs.
+  4. `healthCheckPath: /actuator/health/readiness` gates Render's own rollout health.
+- **`DATABASE_URL` bridge:** Render hands the app `postgres://user:pass@host/db`;
+  [`RenderDatabaseUrlEnvironmentPostProcessor`](src/main/java/com/paytm/wallet/config/RenderDatabaseUrlEnvironmentPostProcessor.java)
+  splits it into `spring.datasource.{url,username,password}` at boot — no shell/entrypoint hack.
+  Verified locally: booting the jar with `DATABASE_URL=postgres://wallet:wallet@localhost:5432/wallet`
+  migrates, passes readiness, and serves `POST /wallets` exactly like the local `jdbc:` form.
+- **Fallback: Fly.io** — [`fly.toml`](fly.toml) + setup notes in its header comment (Postgres is
+  self-managed there, which is why Render is primary).
+- **Free-tier caveats** (see `docs/WRITEUP.md` cost note): the web service sleeps after ~15 min
+  idle (cold start ~30–50s) — `GET /healthz` is dependency-free for warming;
+  [`.github/workflows/keepwarm.yml`](.github/workflows/keepwarm.yml) can ping it every 10 min
+  (disabled until a `DEPLOYED_URL` repo variable is set). The managed Postgres expires ~30 days
+  after creation and caps connections low — `DB_POOL_MAX=5` in `render.yaml` (default `10` locally).
+- **Post-deploy smoke:** `./scripts/smoke.sh <url>` — get-or-create → transfer → idempotent
+  replay → `GET /transfers/{id}` → `/metrics` → `/dashboard`. Set `SMOKE_FUND_SQL_URL` to a
+  psql-reachable connection string to exercise a COMPLETED transfer (there is no deposit API by
+  design — money only enters via a transfer from an already-funded wallet); without it, the script
+  still runs end to end against the DECLINED path.
+- **Public observability:** once deployed, this section gets the live URL, the Render log-stream
+  link (or a `docs/media/` burst recording — TASK-08's fallback), and the dashboard/metrics links.
+- **Teardown:** delete the Blueprint from the Render dashboard (removes the web service and the
+  database together) — no other cleanup.
 
 ## Burst probes
 

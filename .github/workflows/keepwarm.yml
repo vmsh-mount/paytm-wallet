@@ -1,0 +1,25 @@
+# Optional. Render's free web service sleeps after ~15 min idle (cold start
+# ~30-50s on the next request). This pings a public, dependency-free endpoint
+# every 10 minutes so the instance is warm before a grading burst.
+#
+# Costs nothing (GitHub Actions free minutes for a public repo) and touches no
+# secret — /healthz needs no auth. Disabled by default: set the
+# DEPLOYED_URL repo variable (Settings -> Secrets and variables -> Actions ->
+# Variables) to turn it on; the curl step is a no-op without it.
+name: keep-warm
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ping /healthz
+        run: |
+          if [ -z "${{ vars.DEPLOYED_URL }}" ]; then
+            echo "DEPLOYED_URL repo variable not set — skipping (see comment at top of this file)"
+            exit 0
+          fi
+          curl -fsS "${{ vars.DEPLOYED_URL }}/healthz"

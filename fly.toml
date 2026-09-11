@@ -1,0 +1,42 @@
+# Fallback deploy target if Render's free tier is unavailable. Fly's free
+# allowances have shifted over time and Postgres is self-managed (a Fly Machine
+# running Postgres, not a managed product) — Render is primary; this is
+# documented, not exercised in CI.
+#
+# Setup (one time):
+#   fly launch --no-deploy --dockerfile Dockerfile --name paytm-wallet
+#   fly postgres create --name paytm-wallet-db --vm-size shared-cpu-1x --volume-size 1
+#   fly postgres attach paytm-wallet-db -a paytm-wallet   # wires DATABASE_URL as a secret
+#   fly secrets set AUTH_TOKENS='...' TRANSFER_ENGINE=conditional-update DB_POOL_MAX=5
+#   fly deploy
+#
+# `fly postgres attach` sets DATABASE_URL in postgres:// form — the same
+# RenderDatabaseUrlEnvironmentPostProcessor bridges it, no Fly-specific code.
+
+app = "paytm-wallet"
+primary_region = "bom" # Mumbai — closest to India-based reviewers
+
+[build]
+
+[env]
+  PORT = "8080"
+  TRANSFER_ENGINE = "conditional-update"
+  DB_POOL_MAX = "5"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[http_service.checks]]
+  grace_period = "45s"
+  interval = "15s"
+  method = "GET"
+  timeout = "3s"
+  path = "/actuator/health/readiness"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
