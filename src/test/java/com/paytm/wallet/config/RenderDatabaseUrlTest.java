@@ -36,6 +36,14 @@ class RenderDatabaseUrlTest {
     }
 
     @Test
+    void a_literal_plus_in_the_password_is_not_turned_into_a_space() {
+        // "+" is a legal, unreserved sub-delim in URI user-info (RFC 3986 §3.2.1) — it must
+        // survive untouched. A URLDecoder-based decode would wrongly turn it into " ".
+        var info = RenderDatabaseUrl.parse("postgres://u:p+word@h:5432/db");
+        assertThat(info.password()).isEqualTo("p+word");
+    }
+
+    @Test
     void isRenderStyle_is_false_for_a_jdbc_url_or_null() {
         assertThat(RenderDatabaseUrl.isRenderStyle("jdbc:postgresql://localhost:5432/wallet")).isFalse();
         assertThat(RenderDatabaseUrl.isRenderStyle(null)).isFalse();

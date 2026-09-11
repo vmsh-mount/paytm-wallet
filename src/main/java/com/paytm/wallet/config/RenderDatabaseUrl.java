@@ -1,7 +1,7 @@
 package com.paytm.wallet.config;
 
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -38,8 +38,26 @@ public final class RenderDatabaseUrl {
         return new JdbcConnectionInfo(jdbcUrl, username, password);
     }
 
+    /**
+     * Strict percent-decoding of a URI user-info component — {@code %XX} escapes
+     * only. Deliberately {@code URLDecoder}-free: that class implements
+     * {@code application/x-www-form-urlencoded}, which also turns a literal
+     * {@code +} into a space. That's correct for a query string, wrong for
+     * user-info (RFC 3986 §3.2.1), and would silently mangle a generated
+     * password that happens to contain a {@code +}.
+     */
     private static String decode(String s) {
-        return URLDecoder.decode(s, StandardCharsets.UTF_8);
+        ByteArrayOutputStream out = new ByteArrayOutputStream(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '%' && i + 2 < s.length()) {
+                out.write(Integer.parseInt(s.substring(i + 1, i + 3), 16));
+                i += 2;
+            } else {
+                out.write(c);
+            }
+        }
+        return out.toString(StandardCharsets.UTF_8);
     }
 
     private RenderDatabaseUrl() {}

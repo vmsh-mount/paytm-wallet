@@ -2,6 +2,7 @@ package com.paytm.wallet.config;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.env.EnvironmentPostProcessor;
+import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 
@@ -19,8 +20,17 @@ import java.util.Map;
  *
  * <p>Registered via {@code META-INF/spring.factories} — runs before the
  * datasource bean is created, too early for a regular {@code @Configuration}.
+ * {@code getOrder()} is documentation, not a correctness requirement: because
+ * we {@link org.springframework.core.env.MutablePropertySources#addFirst
+ * addFirst} rather than replace, the bridged values win regardless of exactly
+ * when — before or after {@code application.yml} loads — this runs.
  */
-public class RenderDatabaseUrlEnvironmentPostProcessor implements EnvironmentPostProcessor {
+public class RenderDatabaseUrlEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
+
+    @Override
+    public int getOrder() {
+        return Ordered.HIGHEST_PRECEDENCE;
+    }
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
