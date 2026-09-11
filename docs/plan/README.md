@@ -25,7 +25,7 @@ its acceptance criteria and test plan are green and the change is committed.
 | [09](TASK-09-metrics-dashboard.md) | Metrics & dashboard | — | 06 08 | Done |
 | [10](TASK-10-containerization.md) | Containerization & one-command compose | — | 06 | Done |
 | [11](TASK-11-deploy-render.md) | Deploy to Render + managed Postgres | — | 08 09 10 | Blocked on deploy (prep done) |
-| [12](TASK-12-burst-eval-harness.md) | Burst script & correctness eval harness | #1 #2 #3 #4 | 06 07 | Not started |
+| [12](TASK-12-burst-eval-harness.md) | Burst script & correctness eval harness | #1 #2 #3 #4 | 06 07 | Done |
 | [13](TASK-13-writeup-submission.md) | Write-up & submission package | — | all | Not started |
 
 ## Milestones

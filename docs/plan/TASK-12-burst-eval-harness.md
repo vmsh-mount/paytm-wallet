@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Not started |
+| **Status** | Done |
 | **Branch** | `task/12-burst-eval-harness` |
 | **Depends on** | TASK-06, TASK-07 |
 | **Invariant(s)** | **#1 #2 #3 #4** (black-box, against any URL) |

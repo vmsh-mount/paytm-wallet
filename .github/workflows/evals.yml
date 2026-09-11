@@ -1,0 +1,48 @@
+name: evals
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: docker compose up (one command)
+        run: docker compose up -d --build
+
+      - name: wait for app healthy
+        run: |
+          for i in $(seq 1 60); do
+            state=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q app)" 2>/dev/null || echo starting)
+            [ "$state" = "healthy" ] && { echo "healthy after ~${i}s"; exit 0; }
+            sleep 1
+          done
+          docker compose logs app | tail -80
+          echo "app never became healthy" >&2
+          exit 1
+
+      - name: evals/run.sh against the compose stack
+        run: |
+          N=15 K=8 ROUNDS=30 MAX_INFLIGHT=6 ./evals/run.sh http://localhost:8080
+
+      - name: upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: evals/reports/
+          if-no-files-found: warn
+
+      - name: docker compose logs (on failure)
+        if: failure()
+        run: docker compose logs
+
+      - name: docker compose down
+        if: always()
+        run: docker compose down -v --remove-orphans
