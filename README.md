@@ -74,7 +74,7 @@ src/main/java/com/paytm/wallet/
   service/        WalletService, TransferService, domain exceptions
   service/transfer/  TransferEngine + 3 implementations
   repo/           JDBC repositories
-  observability/  correlation-id + access-log filters, DomainEvents, metrics
+  observability/  correlation-id + access-log filters, DomainEvents, WalletMetrics
   config/         auth filter, engine selection
 src/main/resources/
   db/migration/   Flyway SQL
@@ -108,6 +108,34 @@ jq -c 'select(.level=="ERROR")'
 deployed (TASK-11), alongside a screen recording of the stream during `./scripts/burst.sh` in
 [`docs/media/`](docs/media/). Upgrade path: a log drain to Grafana Cloud Loki (free tier) with a
 shareable dashboard — noted, not built (no code, survives restarts).
+
+## Observability → Metrics & Dashboard
+
+- **`GET /metrics`** — Prometheus text (0.0.4), unauthenticated. Same content as
+  `GET /actuator/prometheus` (kept for tooling); `/metrics` is the brief's wording.
+- **`GET /dashboard`** — a static one-pager (no external requests) polling `/metrics` every 3 s:
+  request rate, http p99, error %, and the domain counters + transfer p99 + serializable retries.
+- **RED** comes from `http_server_requests_seconds` (histogram + p50/p95/p99, explicit SLO buckets):
+  - rate: `rate(http_server_requests_seconds_count[1m])`
+  - p99: `http_server_requests_seconds{quantile="0.99"}`
+  - error rate: `sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))`
+- **Domain meters** (low-cardinality — no user/wallet/key tags):
+
+  | meter | meaning |
+  |---|---|
+  | `wallet_transfers_completed_total` | transfers that moved money |
+  | `wallet_transfers_declined_total{reason="insufficient_funds"}` | clean declines |
+  | `wallet_transfers_idempotent_replay_total` | repeat requests served from the stored row |
+  | `wallet_transfers_conflict_total` | same key, different body (409) |
+  | `wallet_transfer_amount_paise` | summary — distribution of completed transfer sizes |
+  | `wallet_transfer_duration_seconds{engine,outcome}` | end-to-end timer — doubles as the engine-comparison view when `TRANSFER_ENGINE` is flipped |
+  | `wallet_transfer_retries_total{engine="serializable"}` | 40001 retries |
+
+  (`_created` is a reserved suffix in the Prometheus Java client, so the completed-transfer counter
+  is `…_completed_total`, not `…_created_total`.)
+
+Grafana Cloud free tier is the documented alternative for historical graphs; the self-hosted
+static dashboard is the primary — zero extra infra, one link, survives the free tier.
 
 ## Roadmap
 

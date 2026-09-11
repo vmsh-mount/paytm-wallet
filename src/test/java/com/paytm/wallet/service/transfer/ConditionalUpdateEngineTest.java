@@ -106,7 +106,7 @@ class ConditionalUpdateEngineTest {
         assertThat(statements).hasSize(2);
         assertThat(statements.get(0)).contains("balance_paise - ?");
         assertThat(statements.get(1)).contains("balance_paise + ?");
-        assertThat(counter("wallet.transfers.created")).isEqualTo(1.0);
+        assertThat(counter("wallet.transfers.completed")).isEqualTo(1.0);
     }
 
     @Test

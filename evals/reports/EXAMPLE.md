@@ -30,7 +30,7 @@ Legend: ✅ pass · ❌ fail · ⏳ not yet run
 ## /metrics delta
 
 ```
-wallet_transfers_created_total              +<n>
+wallet_transfers_completed_total              +<n>
 wallet_transfers_declined_total{...}         +<n>
 wallet_transfers_idempotent_replay_total     +<n>
 http_server_requests_seconds{quantile=0.99}  <s>

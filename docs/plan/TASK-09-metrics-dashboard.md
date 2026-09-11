@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Not started |
+| **Status** | Done |
 | **Branch** | `task/09-metrics-dashboard` |
 | **Depends on** | TASK-06, TASK-08 |
 | **Invariant(s)** | — |
@@ -26,7 +26,7 @@ free snapshot) linked from README.
 - Confirm `http.server.requests` timer: histogram on, p50/p95/p99 published
 - Alias `/actuator/prometheus` → also serve at `/metrics` (brief's wording)
 - Domain meters (`WalletMetrics`, wired in TASK-04/05, verified here):
-  - `wallet_transfers_created_total`
+  - `wallet_transfers_completed_total`
   - `wallet_transfers_declined_total{reason="insufficient_funds"}`
   - `wallet_transfers_idempotent_replay_total`
   - `wallet_transfers_conflict_total`
@@ -70,7 +70,7 @@ free snapshot) linked from README.
 ## Acceptance criteria
 
 - [ ] `GET /metrics` returns Prometheus text, HTTP 200, unauthenticated
-- [ ] After a burst: `wallet_transfers_created_total` and
+- [ ] After a burst: `wallet_transfers_completed_total` and
       `wallet_transfers_declined_total` and `wallet_transfers_idempotent_replay_total`
       all reflect the burst's actual counts (±0)
 - [ ] `http_server_requests_seconds{quantile="0.99"}` present and non-zero

@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -92,13 +93,15 @@ public class AuthFilter implements Filter {
     }
 
     private static final UrlPathHelper PATH_HELPER = UrlPathHelper.defaultInstance;
+    private static final Set<String> OPEN_EXACT =
+            Set.of("/actuator", "/metrics", "/dashboard", "/dashboard.html");
 
     private static boolean isOpenPath(HttpServletRequest request) {
         // Context path stripped + URL-decoded + ";" params removed (UrlPathHelper),
         // then dot-segments collapsed (StringUtils.cleanPath). Deterministic across
         // Tomcat and MockMvc, and a "/actuator/.." traversal resolves out → NOT open.
         String path = StringUtils.cleanPath(PATH_HELPER.getPathWithinApplication(request));
-        return path.equals("/actuator") || path.startsWith("/actuator/");
+        return OPEN_EXACT.contains(path) || path.startsWith("/actuator/");
     }
 
     /** @return the resolved userId, or {@code null} if the header is missing/malformed/unknown. */

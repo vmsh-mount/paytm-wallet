@@ -18,7 +18,7 @@ public class SelectForUpdateEngine extends AbstractJdbcTransferEngine {
 
     public SelectForUpdateEngine(JdbcTemplate jdbc, PlatformTransactionManager txManager,
                                  WalletMetrics metrics) {
-        super(jdbc, txManager, metrics, TransactionDefinition.ISOLATION_READ_COMMITTED);
+        super(jdbc, txManager, metrics, Engine.SELECT_FOR_UPDATE, TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
     @Override
