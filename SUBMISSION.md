@@ -44,6 +44,14 @@ Mapped directly to the brief's "what to send back":
 | Live URL *(optional)* | <https://p2p-wallet.onrender.com> |
 | Public logs link *(optional)* | Render's log view is account-gated; a burst run's structured-log transcript is captured in the eval report below instead |
 
+**Observability, live** (not on the brief's "send back" list by name, but "genuine
+deploy/containerize/observe" is graded — both are public, no auth):
+
+| | |
+|---|---|
+| Metrics (Prometheus text — RED + domain counters) | <https://p2p-wallet.onrender.com/metrics> |
+| Dashboard (polls `/metrics` every 3s) | <https://p2p-wallet.onrender.com/dashboard> |
+
 **Proof of correctness, already run and committed:**
 
 | Artifact | What it shows |
@@ -63,3 +71,5 @@ Mapped directly to the brief's "what to send back":
 - [`evals/`](evals/README.md) — every scenario spec plus the traceability matrix
   ([`evals/matrix.md`](evals/matrix.md)) mapping each invariant to its schema guard, unit test,
   integration test, and black-box probe
+- README's "Observability" sections (Logs, Metrics & Dashboard) — event taxonomy, correlation id,
+  what each metric means; [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design rationale
