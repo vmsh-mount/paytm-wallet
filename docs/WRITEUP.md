@@ -86,19 +86,6 @@
 | Benchmark harness shape, workload-mix constants; dashboard HTML/JS | | ✅ |
 | Healthcheck command, entrypoint details; report markdown layout, `lib.sh` API | | ✅ |
 
-## Free-tier cost note
-
-- **Render free web service + Render free managed Postgres — ₹0, no card.** One Docker image runs
-  identically via `docker compose` locally and on Render; only env vars differ.
-- **Cold start:** the free web service sleeps after ~15 min idle — first request after sleep is
-  ~30–50s. `GET /healthz` is a dependency-free warm-up target; `.github/workflows/keepwarm.yml`
-  can ping it every 10 min (disabled by default).
-- **DB lifetime:** the free managed Postgres **expires ~30 days after creation** and caps
-  connections low — `DB_POOL_MAX=5` on Render (vs `10` locally) keeps Hikari inside that cap under
-  a burst.
-- **Fallback:** `fly.toml` documents a Fly.io path (not exercised — Fly Postgres is self-managed,
-  which is why Render is primary).
-
 ---
 
 Longer form: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md). Evals: [`evals/README.md`](../evals/README.md),
